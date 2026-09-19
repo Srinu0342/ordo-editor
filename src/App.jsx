@@ -17,7 +17,7 @@ import ImportDialog from "./components/ImportDialog.jsx";
 import { nodeTypes, GROUP_TYPES, makeNode, nodeSize } from "./nodes/index.js";
 import { edgeTypes, EdgeMarkers } from "./edges/index.js";
 import { DEFAULT_EDGE_STYLE, applyEdgeStyle, newEdge } from "./edgeStyle.js";
-import { getMermaidLayoutForOrdo } from "./mermaid";
+import { getMermaidLayoutForOrdo, toOrdo } from "./mermaid";
 
 let seq = 0;
 const nextId = () => `n${seq++}`;
@@ -79,7 +79,8 @@ function Flow() {
   const [edgeStyle, setEdgeStyle] = useState(DEFAULT_EDGE_STYLE);
   const [importOpen, setImportOpen] = useState(false);
 
-  const { screenToFlowPosition, toObject, getInternalNode } = useReactFlow();
+  const { screenToFlowPosition, toObject, getInternalNode, fitView } =
+    useReactFlow();
 
   const onConnect = useCallback(
     (c) => setEdges((eds) => addEdge(newEdge(c, edgeStyle), eds)),
@@ -219,22 +220,45 @@ function Flow() {
     [setNodes, absRect, groupAt, markDropTarget],
   );
 
-  // The dialog only collects the source. Converting it into nodes and edges is
-  // WS4's job and lands here when that converter exists.
-  const onMermaidText = useCallback((source, { fileName }) => {
-    console.log("Mermaid source:", { fileName, source });
-    const graphId = `mermaid-${Math.random().toString(36).slice(2)}`;
+  // The dialog collects the source; the extractor turns it into a Mermaid
+  // layout; `toOrdo` restates that layout in our own vocabulary. Import
+  // REPLACES the canvas rather than merging — a half-merged diagram is worse
+  // than either outcome, and undo still gets you back.
+  const onMermaidText = useCallback(
+    (source, { fileName }) => {
+      const graphId = `mermaid-${Math.random().toString(36).slice(2)}`;
 
-    getMermaidLayoutForOrdo(source, graphId).then((layout) => {
-      if (!layout) {
-        console.error('Failed to get Mermaid layout for Ordo');
+      console.log({ graphId });
 
-        return;
-      }
+      getMermaidLayoutForOrdo(source, graphId)
+        .then((layout) => {
+          if (!layout) {
+            console.error("Mermaid import: no layout returned", { fileName });
+            return;
+          }
 
-      console.log('Mermaid layout for Ordo:', layout);
-    });
-  }, []);
+          const { nodes: imported, edges: importedEdges, unsupported } =
+            toOrdo(layout);
+
+          if (unsupported.length) {
+            console.warn(
+              "Mermaid import: drawn as rectangles, no Ordo shape for",
+              unsupported,
+            );
+          }
+
+          setNodes(imported);
+          setEdges(importedEdges);
+
+          // one frame, so the nodes are measured before the viewport is fitted
+          requestAnimationFrame(() => fitView({ padding: 0.2 }));
+        })
+        .catch((error) => {
+          console.error("Mermaid import failed", error);
+        });
+    },
+    [setNodes, setEdges, fitView],
+  );
 
   const onDragOver = useCallback((event) => {
     event.preventDefault(); // required, or the drop never fires
@@ -299,25 +323,6 @@ function Flow() {
         onClose={() => setImportOpen(false)}
         onImport={onMermaidText}
       />
-      <button
-        onClick={() => {
-          console.log("React Flow state:", toObject());
-        }}
-        style={{
-          position: "absolute",
-          top: 8,
-          right: 8,
-          zIndex: 1000,
-          padding: "4px 8px",
-          fontSize: 12,
-          background: "#f1f5f9",
-          border: "1px solid #cbd5e1",
-          borderRadius: 4,
-          cursor: "pointer",
-        }}
-      >
-        Print React Flow state to console
-      </button>
 
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
         <Sidebar

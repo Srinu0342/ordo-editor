@@ -14,7 +14,7 @@ export const getMermaidLayoutForOrdo = async (src, graphId) => {
 
     const db = diagram.db;
     
-    const subgraphs = db.getSubGraphs();
+    const subgraphs = db.getSubGraphs?.();
 
     return { mermaid: globalThis.__ordo_mermaid, subgraphs };
   } catch (error) {
