@@ -1,0 +1,6 @@
+import { createRoot } from 'react-dom/client';
+import { ReactFlow } from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+import App from './App';
+
+createRoot(document.getElementById('root')).render(<App />);

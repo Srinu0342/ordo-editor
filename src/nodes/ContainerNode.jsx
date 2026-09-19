@@ -1,0 +1,73 @@
+import { useCallback } from "react";
+import { useReactFlow, NodeResizer } from "@xyflow/react";
+import { LIGHT } from "../theme.js";
+import EditableLabel from "./EditableLabel.jsx";
+import { Anchors, nodeTheme } from "./chrome.jsx";
+
+// Holds child nodes. Not a Box with a dashed border: the containment tree, the
+// title band that children must not overlap, and the parent-relative coordinate
+// frame are all structural, which is what makes it a type.
+
+export default function ContainerNode({ id, data, selected }) {
+  const { setNodes } = useReactFlow();
+  const theme = nodeTheme(selected);
+  const isDropTarget = Boolean(data.isDropTarget);
+
+  const setLabel = useCallback(
+    (value) =>
+      setNodes((nds) =>
+        nds.map((nd) =>
+          nd.id === id ? { ...nd, data: { ...nd.data, label: value } } : nd,
+        ),
+      ),
+    [id, setNodes],
+  );
+
+  return (
+    <>
+      <NodeResizer
+        isVisible={selected}
+        minWidth={140}
+        minHeight={90}
+        color={theme["node.stroke.selected"]}
+      />
+      <div
+        style={{
+          width: "100%",
+          height: "100%",
+          boxSizing: "border-box",
+          borderRadius: 6,
+          border: `1.5px dashed ${theme["node.stroke"]}`,
+          background: isDropTarget ? "rgba(99,102,241,0.12)" : "transparent",
+          outline: isDropTarget ? `2px dashed ${LIGHT["node.accent"]}` : "none",
+          outlineOffset: 2,
+          position: "relative",
+        }}
+      >
+        {/* title band — children are laid out below it, which is why the
+            container cannot be a Box with a label slot */}
+        <div
+          style={{
+            position: "absolute",
+            top: -11,
+            left: 10,
+            padding: "0 6px",
+            background: LIGHT["container.band"],
+            fontSize: 12,
+            fontWeight: 600,
+            color: LIGHT["node.ink.muted"],
+            fontFamily: "system-ui, sans-serif",
+            borderRadius: 3,
+          }}
+        >
+          <EditableLabel
+            value={data.label ?? ""}
+            onChange={setLabel}
+            placeholder="group"
+          />
+        </div>
+        <Anchors />
+      </div>
+    </>
+  );
+}
