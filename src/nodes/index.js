@@ -48,3 +48,17 @@ export function makeNode(kind, { id, position, parentId }) {
 
 export const nodeSize = (kind) =>
   NODE_TYPE_DEFAULTS[kind]?.size ?? defaultSize(kind);
+
+// The palette key a live node came from: `box` carries it in data.shape,
+// every other type IS its key. Lets a node be measured, cloned or re-drawn
+// without the caller knowing which of the two cases it is looking at.
+export const nodeKind = (node) =>
+  node.type === "box" ? (node.data?.shape ?? DEFAULT_SHAPE) : node.type;
+
+// Best available size for a node that may not be mounted yet — a freshly
+// pasted node has to be hit-tested against groups before React Flow has
+// measured it, so fall back through the explicit style to the registry.
+export const sizeOfNode = (node) => [
+  node.width ?? node.style?.width ?? nodeSize(nodeKind(node))[0],
+  node.height ?? node.style?.height ?? nodeSize(nodeKind(node))[1],
+];

@@ -6,6 +6,8 @@ import {
 } from "../edgeStyle.js";
 import { MARKERS, MARKER_KEYS } from "../edges/index.js";
 
+const MOD = navigator.platform.startsWith("Mac") ? "\u2318" : "Ctrl";
+
 // Line appearance. Edits land on the current edge selection when there is one,
 // and otherwise become the default for the next edge drawn — the behaviour
 // every drawing tool has, and the reason the strip reports which it will do.
@@ -64,8 +66,29 @@ function MarkerSelect({ id, title, value, onChange }) {
   );
 }
 
-export default function Toolbar({ value, onChange, selectedCount, onImport }) {
+// The selection chip doubles as the only place the multi-select and clipboard
+// chords are written down — shortcuts nobody can see are shortcuts nobody uses.
+const SHORTCUTS = [
+  "Shift-drag: lasso",
+  `${MOD}-click: add to selection`,
+  `${MOD}+A: select all`,
+  `${MOD}+C / ${MOD}+X / ${MOD}+V: copy, cut, paste`,
+  `${MOD}+D: duplicate`,
+].join("\n");
+
+export default function Toolbar({
+  value,
+  onChange,
+  selectedCount,
+  selectedNodeCount = 0,
+  onImport,
+}) {
   const activeType = lineTypeOf(value.dash);
+  const picked = [
+    selectedNodeCount &&
+      `${selectedNodeCount} node${selectedNodeCount > 1 ? "s" : ""}`,
+    selectedCount && `${selectedCount} line${selectedCount > 1 ? "s" : ""}`,
+  ].filter(Boolean);
 
   return (
     <div
@@ -193,12 +216,25 @@ export default function Toolbar({ value, onChange, selectedCount, onImport }) {
         onChange={(markerEnd) => onChange({ markerEnd })}
       />
 
+      <span
+        title={SHORTCUTS}
+        style={{
+          marginLeft: "auto",
+          fontSize: 12.5,
+          color: picked.length ? "#4f46e5" : "#94a3b8",
+          cursor: "help",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {picked.length ? `${picked.join(" · ")} selected` : "Nothing selected"}
+      </span>
+
       <button
         type="button"
         onClick={onImport}
         title="Import a Mermaid diagram"
         style={{
-          marginLeft: "auto",
+          marginLeft: 10,
           display: "inline-flex",
           alignItems: "center",
           gap: 7,

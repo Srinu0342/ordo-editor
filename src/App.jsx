@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -14,15 +14,43 @@ import {
 import Sidebar from "./components/Sidebar.jsx";
 import Toolbar from "./components/Toolbar.jsx";
 import ImportDialog from "./components/ImportDialog.jsx";
-import { nodeTypes, GROUP_TYPES, makeNode, nodeSize } from "./nodes/index.js";
+import {
+  nodeTypes,
+  GROUP_TYPES,
+  makeNode,
+  nodeSize,
+  sizeOfNode,
+} from "./nodes/index.js";
 import { edgeTypes, EdgeMarkers } from "./edges/index.js";
 import { DEFAULT_EDGE_STYLE, applyEdgeStyle, newEdge } from "./edgeStyle.js";
 import { getMermaidLayoutForOrdo, toOrdo } from "./mermaid";
+import {
+  copySelection,
+  cloneGraph,
+  unionRect,
+  selectedIds,
+  withDescendants,
+  sortParentsFirst,
+} from "./selection.js";
 
 let seq = 0;
-const nextId = () => `n${seq++}`;
+// `taken` is the live id set: Mermaid import brings in ids we did not mint
+// ("A", "n0"…), so the counter alone is not a uniqueness guarantee.
+const nextId = (taken) => {
+  let id;
+  do {
+    id = `n${seq++}`;
+  } while (taken?.has(id));
+  return id;
+};
 
 const GRID = 10;
+
+// Where a paste lands when the pointer is off-canvas (keyboard-only paste) and
+// what a duplicate is nudged by. Grid-aligned, so pasted nodes stay snapped.
+const PASTE_NUDGE = 2 * GRID;
+
+const snap = (v) => Math.round(v / GRID) * GRID;
 
 // --- group membership -------------------------------------------------------
 
@@ -45,28 +73,13 @@ const depthOf = (byId, id) => {
 };
 
 // Keeps a group from being dropped into one of its own descendants.
-const isDescendantOf = (byId, id, ancestorId) => {
+const isDescendantOfAny = (byId, id, ancestorIds) => {
   let cur = byId.get(id);
   while (cur?.parentId) {
-    if (cur.parentId === ancestorId) return true;
+    if (ancestorIds.has(cur.parentId)) return true;
     cur = byId.get(cur.parentId);
   }
   return false;
-};
-
-// React Flow requires a parent to appear BEFORE its children in the array.
-const sortParentsFirst = (nodes) => {
-  const byId = new Map(nodes.map((n) => [n.id, n]));
-  const seen = new Set();
-  const out = [];
-  const visit = (n) => {
-    if (!n || seen.has(n.id)) return;
-    seen.add(n.id); // marked before recursing, so a bad cycle can't hang us
-    visit(byId.get(n.parentId));
-    out.push(n);
-  };
-  nodes.forEach(visit);
-  return out;
 };
 
 const initialNodes = [];
@@ -81,6 +94,17 @@ function Flow() {
 
   const { screenToFlowPosition, toObject, getInternalNode, fitView } =
     useReactFlow();
+
+  // Window-level shortcuts read the graph through refs: binding the listener to
+  // `nodes` would re-subscribe on every drag frame for no gain.
+  const graphRef = useRef({ nodes, edges });
+  graphRef.current = { nodes, edges };
+
+  // Last pointer position over the canvas, in flow coordinates. Null whenever
+  // the pointer is outside, which is what makes "paste where I'm pointing"
+  // degrade cleanly into "paste slightly offset".
+  const pointerRef = useRef(null);
+  const clipboardRef = useRef(null);
 
   const onConnect = useCallback(
     (c) => setEdges((eds) => addEdge(newEdge(c, edgeStyle), eds)),
@@ -118,18 +142,22 @@ function Flow() {
     [getInternalNode],
   );
 
-  // innermost group that fully contains `rect`. `skipId` and everything nested
-  // under it are ignored, so a group can never become its own ancestor.
+  // innermost group that fully contains `rect`. Everything in `skipIds`, and
+  // everything nested under it, is ignored — so a group can never become its
+  // own ancestor, and a group being dragged can never adopt its travelling
+  // companions mid-flight.
   const groupAt = useCallback(
-    (rect, allNodes, skipId) => {
+    (rect, allNodes, skipIds = new Set()) => {
+      if (!rect) return null;
+
       const byId = new Map(allNodes.map((n) => [n.id, n]));
       let best = null;
       let bestDepth = -1;
 
       for (const n of allNodes) {
         if (!GROUP_TYPES.has(n.type)) continue;
-        if (n.id === skipId) continue;
-        if (skipId && isDescendantOf(byId, n.id, skipId)) continue;
+        if (skipIds.has(n.id)) continue;
+        if (isDescendantOfAny(byId, n.id, skipIds)) continue;
 
         const groupRect = absRect(n.id);
         if (!groupRect || !contains(groupRect, rect)) continue;
@@ -145,18 +173,60 @@ function Flow() {
     [absRect],
   );
 
-  // flags exactly one group (or none) as the live drop target. The flag is
-  // transient, so it's deleted rather than set to false — nothing leaks into
-  // `toObject()` once the drag is over.
-  const markDropTarget = useCallback(
-    (targetId) => {
+  // THE multi-drag rule. A COHERENT selection — every dragged node came out of
+  // the same frame — gets ONE decision, taken on the union of their rects, so
+  // the group either swallows the whole selection or none of it. A mixed
+  // selection is hit-tested per node instead: there is no single honest answer
+  // for it, and re-homing everything to the union's target would yank nodes out
+  // of groups the user never dragged near.
+  //
+  // A single-node drag is trivially coherent, so this reduces to the old
+  // one-node behaviour without a special case.
+  const dropTargets = useCallback(
+    (draggedNodes, allNodes) => {
+      const byId = new Map(allNodes.map((n) => [n.id, n]));
+      const skipIds = new Set(draggedNodes.map((n) => n.id));
+
+      const rects = new Map();
+      for (const n of draggedNodes) {
+        const rect = absRect(n.id);
+        if (rect) rects.set(n.id, rect);
+      }
+
+      const parents = new Set(
+        draggedNodes.map((n) => byId.get(n.id)?.parentId ?? null),
+      );
+      const coherent = parents.size === 1 && rects.size === draggedNodes.length;
+
+      const targets = new Map();
+      if (coherent) {
+        const shared = groupAt(
+          unionRect([...rects.values()]),
+          allNodes,
+          skipIds,
+        );
+        for (const id of rects.keys()) targets.set(id, shared);
+      } else {
+        for (const [id, rect] of rects) {
+          targets.set(id, groupAt(rect, allNodes, skipIds));
+        }
+      }
+      return targets;
+    },
+    [absRect, groupAt],
+  );
+
+  // flags the live drop targets. The flag is transient, so it's deleted rather
+  // than set to false — nothing leaks into `toObject()` once the drag is over.
+  const markDropTargets = useCallback(
+    (targetIds) => {
       setNodes((nds) => {
         let changed = false;
 
         const next = nds.map((n) => {
           if (!GROUP_TYPES.has(n.type)) return n;
 
-          const isTarget = n.id === targetId;
+          const isTarget = targetIds.has(n.id);
           if (Boolean(n.data.isDropTarget) === isTarget) return n;
 
           changed = true;
@@ -174,32 +244,44 @@ function Flow() {
     [setNodes],
   );
 
-  // live feedback: highlight the group the node would land in
+  // live feedback: highlight the group(s) the selection would land in
   const onNodeDrag = useCallback(
-    (_event, node) => {
-      const rect = absRect(node.id);
-      const parent = rect ? groupAt(rect, nodes, node.id) : null;
-      markDropTarget(parent && parent.id !== node.parentId ? parent.id : null);
+    (_event, _node, draggedNodes) => {
+      const byId = new Map(nodes.map((n) => [n.id, n]));
+      const live = new Set();
+
+      for (const [id, target] of dropTargets(draggedNodes, nodes)) {
+        if (target && target.id !== (byId.get(id)?.parentId ?? undefined)) {
+          live.add(target.id);
+        }
+      }
+      markDropTargets(live);
     },
-    [absRect, groupAt, nodes, markDropTarget],
+    [dropTargets, nodes, markDropTargets],
   );
 
-  // THE commit: adopt into a group, move between groups, or release entirely
+  // THE commit: adopt into a group, move between groups, or release entirely.
+  //
+  // `draggedNodes` is the whole moving selection, whether it was grabbed by one
+  // of its members or by the rubber-band overlay — React Flow reports both
+  // through here, and already drops children whose parent is moving too, so
+  // nothing double-counts them.
   const onNodeDragStop = useCallback(
     (_event, _node, draggedNodes) => {
-      markDropTarget(null); // queued first, so the flag is gone before we re-parent
+      // queued first, so the flag is gone before we re-parent
+      markDropTargets(new Set());
 
       setNodes((nds) => {
-        const moved = new Set(draggedNodes.map((n) => n.id));
+        const targets = dropTargets(draggedNodes, nds);
         let changed = false;
 
         const next = nds.map((n) => {
-          if (!moved.has(n.id)) return n;
+          if (!targets.has(n.id)) return n;
 
           const rect = absRect(n.id);
           if (!rect) return n;
 
-          const parent = groupAt(rect, nds, n.id);
+          const parent = targets.get(n.id);
           const parentId = parent?.id;
           if ((n.parentId ?? undefined) === parentId) return n; // no change
 
@@ -217,8 +299,173 @@ function Flow() {
         return changed ? sortParentsFirst(next) : nds;
       });
     },
-    [setNodes, absRect, groupAt, markDropTarget],
+    [setNodes, absRect, dropTargets, markDropTargets],
   );
+
+  // --- clipboard ------------------------------------------------------------
+
+  const copy = useCallback(() => {
+    const { nodes: nds, edges: eds } = graphRef.current;
+    const clip = copySelection({ nodes: nds, edges: eds, absRect });
+    if (clip) clipboardRef.current = clip;
+    return clip;
+  }, [absRect]);
+
+  // Pastes a payload and hands the selection to the copies. `dx`/`dy` move the
+  // roots; children ride along inside their parents, so a group's internals are
+  // never re-laid-out by a paste.
+  const paste = useCallback(
+    (clip, { dx, dy }) => {
+      if (!clip?.nodes.length) return;
+
+      const taken = new Set(graphRef.current.nodes.map((n) => n.id));
+      const newNodeId = () => {
+        const id = nextId(taken);
+        taken.add(id);
+        return id;
+      };
+      let edgeSeq = 0;
+      const newEdgeId = (source, target) => `e${edgeSeq++}-${source}-${target}`;
+
+      const fresh = cloneGraph(clip, { newNodeId, newEdgeId, dx, dy });
+
+      setNodes((nds) => {
+        const landing = new Set(fresh.nodes.map((n) => n.id));
+
+        // Roots are hit-tested exactly like a palette drop: paste into a group
+        // and the copies belong to it, paste onto open canvas and they don't.
+        const placed = fresh.nodes.map((n) => {
+          if (n.parentId) return n;
+
+          const [width, height] = sizeOfNode(n);
+          const parent = groupAt(
+            { ...n.position, width, height },
+            nds,
+            landing,
+          );
+          if (!parent) return n;
+
+          const origin = absRect(parent.id) ?? { x: 0, y: 0 };
+          return {
+            ...n,
+            parentId: parent.id,
+            position: {
+              x: n.position.x - origin.x,
+              y: n.position.y - origin.y,
+            },
+          };
+        });
+
+        const cleared = nds.map((n) =>
+          n.selected ? { ...n, selected: false } : n,
+        );
+        return sortParentsFirst(cleared.concat(placed));
+      });
+
+      setEdges((eds) =>
+        eds
+          .map((e) => (e.selected ? { ...e, selected: false } : e))
+          .concat(fresh.edges),
+      );
+    },
+    [setNodes, setEdges, groupAt, absRect],
+  );
+
+  // Paste lands under the pointer when there is one — the clipboard's own
+  // bounding box is moved to the cursor, so a multi-node paste keeps its
+  // internal spacing and arrives where you are looking.
+  const pasteFromClipboard = useCallback(() => {
+    const clip = clipboardRef.current;
+    if (!clip) return;
+
+    const at = pointerRef.current;
+    paste(clip, {
+      dx: at ? snap(at.x - clip.bounds.x) : PASTE_NUDGE,
+      dy: at ? snap(at.y - clip.bounds.y) : PASTE_NUDGE,
+    });
+  }, [paste]);
+
+  // The other half of a cut. Removes exactly what the copy captured — the
+  // selection plus everything nested under it — and every edge that just lost
+  // an end, because an edge pointing at a node that is gone is not an edge.
+  //
+  // A selected edge between two nodes that STAY is left alone: the clipboard
+  // could not carry it (both ends have to travel for a paste to reconnect it),
+  // so cutting it would be a deletion dressed up as a move. Delete still does
+  // what Delete does.
+  const removeCopied = useCallback(() => {
+    const gone = withDescendants(
+      graphRef.current.nodes,
+      selectedIds(graphRef.current.nodes),
+    );
+    if (!gone.size) return;
+
+    setNodes((nds) => nds.filter((n) => !gone.has(n.id)));
+    setEdges((eds) =>
+      eds.filter((e) => !gone.has(e.source) && !gone.has(e.target)),
+    );
+  }, [setNodes, setEdges]);
+
+  // Ctrl/Cmd chords. React Flow's own deleteKeyCode still handles Delete; these
+  // are the ones it has no opinion about.
+  useEffect(() => {
+    const isTyping = (el) =>
+      el instanceof HTMLElement &&
+      (el.isContentEditable ||
+        ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName));
+
+    const onKeyDown = (event) => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
+      if (isTyping(event.target)) return; // a label being edited owns its keys
+
+      const key = event.key.toLowerCase();
+
+      if (key === "c") {
+        if (copy()) event.preventDefault();
+        return;
+      }
+
+      if (key === "x") {
+        if (copy()) {
+          removeCopied();
+          event.preventDefault();
+        }
+        return;
+      }
+
+      if (key === "v") {
+        event.preventDefault();
+        pasteFromClipboard();
+        return;
+      }
+
+      // Duplicate is a copy/paste that leaves the clipboard alone — you should
+      // be able to duplicate something without losing what you had copied.
+      if (key === "d") {
+        event.preventDefault();
+        const clip = copySelection({ ...graphRef.current, absRect });
+        if (clip) paste(clip, { dx: PASTE_NUDGE, dy: PASTE_NUDGE });
+        return;
+      }
+
+      if (key === "a") {
+        event.preventDefault();
+        setNodes((nds) => nds.map((n) => ({ ...n, selected: true })));
+        setEdges((eds) => eds.map((e) => ({ ...e, selected: true })));
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
+    copy,
+    paste,
+    pasteFromClipboard,
+    removeCopied,
+    absRect,
+    setNodes,
+    setEdges,
+  ]);
 
   // The dialog collects the source; the extractor turns it into a Mermaid
   // layout; `toOrdo` restates that layout in our own vocabulary. Import
@@ -227,8 +474,6 @@ function Flow() {
   const onMermaidText = useCallback(
     (source, { fileName }) => {
       const graphId = `mermaid-${Math.random().toString(36).slice(2)}`;
-
-      console.log({ graphId });
 
       getMermaidLayoutForOrdo(source, graphId)
         .then((layout) => {
@@ -282,13 +527,13 @@ function Flow() {
         // comes from the registry default. Every drag after that uses the real
         // measured size.
         const [width, height] = nodeSize(kind);
-        const parent = groupAt({ ...position, width, height }, nds, null);
+        const parent = groupAt({ ...position, width, height }, nds);
         const origin = parent ? absRect(parent.id) : null;
 
         return sortParentsFirst(
           nds.concat(
             makeNode(kind, {
-              id: nextId(),
+              id: nextId(new Set(nds.map((n) => n.id))),
               // a child's position is relative to its parent's top-left
               position: origin
                 ? { x: position.x - origin.x, y: position.y - origin.y }
@@ -301,6 +546,20 @@ function Flow() {
     },
     [screenToFlowPosition, setNodes, groupAt, absRect],
   );
+
+  const trackPointer = useCallback(
+    (event) => {
+      pointerRef.current = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+    },
+    [screenToFlowPosition],
+  );
+
+  const forgetPointer = useCallback(() => {
+    pointerRef.current = null;
+  }, []);
 
   return (
     <div
@@ -315,6 +574,7 @@ function Flow() {
         value={edgeStyle}
         onChange={changeEdgeStyle}
         selectedCount={edges.reduce((n, e) => n + (e.selected ? 1 : 0), 0)}
+        selectedNodeCount={nodes.reduce((n, x) => n + (x.selected ? 1 : 0), 0)}
         onImport={() => setImportOpen(true)}
       />
 
@@ -337,6 +597,8 @@ function Flow() {
           style={{ flex: 1, position: "relative" }}
           onDrop={onDrop}
           onDragOver={onDragOver}
+          onPointerMove={trackPointer}
+          onPointerLeave={forgetPointer}
         >
           {/* marker <defs> mounted once; edges reference them by url(#id) */}
           <EdgeMarkers />
@@ -356,6 +618,12 @@ function Flow() {
             snapToGrid
             snapGrid={[GRID, GRID]}
             deleteKeyCode={["Backspace", "Delete"]}
+            // Shift-drag rubber-bands; Cmd/Ctrl-click adds to the selection.
+            // "partial" means grazing a node selects it, which is what people
+            // expect from a lasso and stops big groups being unselectable.
+            selectionKeyCode="Shift"
+            multiSelectionKeyCode={["Meta", "Control"]}
+            selectionMode="partial"
           >
             <Background variant="lines" gap={GRID} size={1} />
             <MiniMap />
