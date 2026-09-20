@@ -148,21 +148,8 @@ export function copySelection({ nodes, edges, absRect }) {
 export function cloneGraph(clip, { newNodeId, newEdgeId, dx = 0, dy = 0 }) {
   const idMap = new Map(clip.nodes.map((n) => [n.id, newNodeId()]));
 
-  const nodes = clip.nodes.map((n) => {
-    const copy = clean(n);
-    const parentId = n.parentId ? idMap.get(n.parentId) : undefined;
-
-    return {
-      ...copy,
-      id: idMap.get(n.id),
-      ...(parentId ? { parentId } : {}),
-      position: parentId
-        ? copy.position
-        : { x: copy.position.x + dx, y: copy.position.y + dy },
-      selected: true,
-    };
-  });
-
+  // Edges first, so a node that REFERENCES an edge — a tube riding one — can be
+  // pointed at the copy instead of the original.
   const edges = clip.edges.map((e) => {
     const source = idMap.get(e.source);
     const target = idMap.get(e.target);
@@ -175,5 +162,40 @@ export function cloneGraph(clip, { newNodeId, newEdgeId, dx = 0, dy = 0 }) {
     };
   });
 
+  const edgeMap = new Map(clip.edges.map((e, i) => [e.id, edges[i].id]));
+
+  const nodes = clip.nodes.map((n) => {
+    const copy = clean(n);
+    const parentId = n.parentId ? idMap.get(n.parentId) : undefined;
+    const position = parentId
+      ? copy.position
+      : { x: copy.position.x + dx, y: copy.position.y + dy };
+
+    return {
+      ...copy,
+      id: idMap.get(n.id),
+      ...(parentId ? { parentId } : {}),
+      position,
+      data: reattach(copy.data, edgeMap),
+      selected: true,
+    };
+  });
+
   return { nodes, edges };
+}
+
+// An attachment survives a copy only if the edge it rides was copied too. A
+// second tube riding the ORIGINAL edge would sit exactly on top of the first,
+// which is never what pasting next to something means — so it is released and
+// lands where the paste put it.
+function reattach(data, edgeMap) {
+  const edgeId = data?.attach?.edgeId;
+  if (!edgeId) return data;
+
+  const copied = edgeMap.get(edgeId);
+  if (!copied) {
+    const { attach: _released, ...rest } = data;
+    return rest;
+  }
+  return { ...data, attach: { ...data.attach, edgeId: copied } };
 }

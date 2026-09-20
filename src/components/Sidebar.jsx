@@ -35,6 +35,11 @@ const STRUCTURAL = [
     label: "Text",
     svg: '<path d="M10 14H46M10 23H34" stroke="#94a3b8" stroke-width="1.6" stroke-linecap="round"/>',
   },
+  {
+    kind: "tube",
+    label: "Timeline tube — drop it on an edge to ride it",
+    svg: '<rect x="23.5" y="3" width="9" height="30" rx="4.5" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.4"/><path d="M25 8h6M25 18h6M25 28h6" stroke="#cbd5e1" stroke-width="1.2"/>',
+  },
 ];
 
 const wrapSvg = (body) =>

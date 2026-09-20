@@ -20,7 +20,18 @@ import {
   makeNode,
   nodeSize,
   sizeOfNode,
+  isUnparented,
+  TubeFollower,
+  TUBE_TYPE,
 } from "./nodes/index.js";
+import {
+  nearestEdge,
+  nearestOnPath,
+  edgePathEl,
+  edgesTouching,
+  SNAP_DIST,
+  DETACH_DIST,
+} from "./edges/attach.js";
 import { edgeTypes, EdgeMarkers } from "./edges/index.js";
 import { DEFAULT_EDGE_STYLE, applyEdgeStyle, newEdge } from "./edgeStyle.js";
 import { getMermaidLayoutForOrdo, toOrdo } from "./mermaid";
@@ -185,18 +196,22 @@ function Flow() {
   const dropTargets = useCallback(
     (draggedNodes, allNodes) => {
       const byId = new Map(allNodes.map((n) => [n.id, n]));
+      // Everything moving is skipped when hit-testing, including the riders
+      // that are about to be excluded from adoption — a group must not adopt
+      // itself, whatever the travelling node turns out to be.
       const skipIds = new Set(draggedNodes.map((n) => n.id));
+      const adoptable = draggedNodes.filter((n) => !isUnparented(n));
 
       const rects = new Map();
-      for (const n of draggedNodes) {
+      for (const n of adoptable) {
         const rect = absRect(n.id);
         if (rect) rects.set(n.id, rect);
       }
 
       const parents = new Set(
-        draggedNodes.map((n) => byId.get(n.id)?.parentId ?? null),
+        adoptable.map((n) => byId.get(n.id)?.parentId ?? null),
       );
-      const coherent = parents.size === 1 && rects.size === draggedNodes.length;
+      const coherent = parents.size === 1 && rects.size === adoptable.length;
 
       const targets = new Map();
       if (coherent) {
@@ -244,6 +259,71 @@ function Flow() {
     [setNodes],
   );
 
+  const centreOf = useCallback(
+    (id) => {
+      const r = absRect(id);
+      return r ? { x: r.x + r.width / 2, y: r.y + r.height / 2 } : null;
+    },
+    [absRect],
+  );
+
+  // Writes `attach` onto some nodes and strips it from others in one pass, so a
+  // tube that hops from one edge to another never exists in both states.
+  const setAttachments = useCallback(
+    (attachments, released) => {
+      if (!attachments.size && !released.size) return;
+
+      setNodes((nds) => {
+        let changed = false;
+
+        const next = nds.map((n) => {
+          if (released.has(n.id)) {
+            if (!n.data?.attach) return n;
+            changed = true;
+            const { attach: _gone, ...data } = n.data;
+            return { ...n, data };
+          }
+
+          const attach = attachments.get(n.id);
+          if (!attach) return n;
+          changed = true;
+          return { ...n, data: { ...n.data, attach } };
+        });
+
+        // React Flow reports a dragged node with the data it had when the drag
+        // began, so a release is asked for again on every frame after the
+        // first. Same reference when nothing actually changed, or the canvas
+        // re-renders for the rest of the drag over a decision already taken.
+        return changed ? next : nds;
+      });
+    },
+    [setNodes],
+  );
+
+  // Pulling a rider clear of its edge releases it — mid-drag, not on drop, so
+  // you can see the moment it lets go rather than discovering it afterwards.
+  // DETACH_DIST is larger than the snap radius on purpose: an attached tube
+  // nudged by a pixel must not flicker between held and free.
+  const releasePulledAway = useCallback(
+    (draggedNodes) => {
+      const released = new Set();
+
+      for (const node of draggedNodes) {
+        const attach = node.data?.attach;
+        if (!attach) continue;
+
+        const centre = centreOf(node.id);
+        const hit = centre
+          ? nearestOnPath(edgePathEl(attach.edgeId), centre)
+          : null;
+        if (!hit || hit.dist > DETACH_DIST) released.add(node.id);
+      }
+
+      setAttachments(new Map(), released);
+    },
+    [centreOf, setAttachments],
+  );
+
   // live feedback: highlight the group(s) the selection would land in
   const onNodeDrag = useCallback(
     (_event, _node, draggedNodes) => {
@@ -256,8 +336,49 @@ function Flow() {
         }
       }
       markDropTargets(live);
+      releasePulledAway(draggedNodes);
     },
-    [dropTargets, nodes, markDropTargets],
+    [dropTargets, nodes, markDropTargets, releasePulledAway],
+  );
+
+  // Where a rider ends up. Dropped within reach of an edge it grabs on at the
+  // nearest point; dropped anywhere else it is simply a node again.
+  //
+  // Edges that END on something being dragged are excluded: they move with the
+  // tube, so a tube attached to its own edge would chase a point that is
+  // chasing it back and the pair would never come to rest.
+  const settleRiders = useCallback(
+    (draggedNodes) => {
+      const riders = draggedNodes.filter((n) => n.type === TUBE_TYPE);
+      if (!riders.length) return;
+
+      const { edges: eds } = graphRef.current;
+      const moving = new Set(draggedNodes.map((n) => n.id));
+      const ownEdges = edgesTouching(eds, moving);
+
+      const attachments = new Map();
+      const released = new Set();
+
+      for (const rider of riders) {
+        const centre = centreOf(rider.id);
+        const hit = centre
+          ? nearestEdge(eds, centre, SNAP_DIST, ownEdges)
+          : null;
+
+        if (hit) {
+          attachments.set(rider.id, {
+            edgeId: hit.edgeId,
+            t: hit.t,
+            angle: hit.angle,
+          });
+        } else {
+          released.add(rider.id);
+        }
+      }
+
+      setAttachments(attachments, released);
+    },
+    [centreOf, setAttachments],
   );
 
   // THE commit: adopt into a group, move between groups, or release entirely.
@@ -298,8 +419,10 @@ function Flow() {
 
         return changed ? sortParentsFirst(next) : nds;
       });
+
+      settleRiders(draggedNodes);
     },
-    [setNodes, absRect, dropTargets, markDropTargets],
+    [setNodes, absRect, dropTargets, markDropTargets, settleRiders],
   );
 
   // --- clipboard ------------------------------------------------------------
@@ -335,7 +458,7 @@ function Flow() {
         // Roots are hit-tested exactly like a palette drop: paste into a group
         // and the copies belong to it, paste onto open canvas and they don't.
         const placed = fresh.nodes.map((n) => {
-          if (n.parentId) return n;
+          if (n.parentId || isUnparented(n)) return n;
 
           const [width, height] = sizeOfNode(n);
           const parent = groupAt(
@@ -517,23 +640,55 @@ function Flow() {
       if (!kind) return;
 
       // THE conversion: mouse pixels → flow coordinates
-      const position = screenToFlowPosition({
-        x: event.clientX,
-        y: event.clientY,
-      });
+      const client = { x: event.clientX, y: event.clientY };
+      const position = screenToFlowPosition(client);
+
+      // A rider lands on a path, not on the grid. The snap that keeps ordinary
+      // nodes tidy would move the drop by up to half a cell before the edge is
+      // hit-tested, which is enough to attach it beside the point you aimed at.
+      const exact = screenToFlowPosition(client, { snapToGrid: false });
+
+      // A palette drop is hit-tested before the node has mounted, so its size
+      // comes from the registry default. Every drag after that uses the real
+      // measured size.
+      const [width, height] = nodeSize(kind);
+
+      // A rider is the one kind that can be dropped ON something other than the
+      // canvas or a group. It takes precedence: if the pointer is over an edge,
+      // that is what the drop meant.
+      const hit =
+        kind === TUBE_TYPE
+          ? nearestEdge(graphRef.current.edges, exact, SNAP_DIST)
+          : null;
 
       setNodes((nds) => {
-        // A palette drop is hit-tested before the node has mounted, so its size
-        // comes from the registry default. Every drag after that uses the real
-        // measured size.
-        const [width, height] = nodeSize(kind);
-        const parent = groupAt({ ...position, width, height }, nds);
+        const id = nextId(new Set(nds.map((n) => n.id)));
+
+        if (hit) {
+          return sortParentsFirst(
+            nds.concat(
+              makeNode(kind, {
+                id,
+                // centred on the path: a rider straddles its edge rather than
+                // hanging off it by its top-left corner
+                position: { x: hit.x - width / 2, y: hit.y - height / 2 },
+                data: {
+                  attach: { edgeId: hit.edgeId, t: hit.t, angle: hit.angle },
+                },
+              }),
+            ),
+          );
+        }
+
+        const parent = isUnparented({ type: kind })
+          ? null
+          : groupAt({ ...position, width, height }, nds);
         const origin = parent ? absRect(parent.id) : null;
 
         return sortParentsFirst(
           nds.concat(
             makeNode(kind, {
-              id: nextId(new Set(nds.map((n) => n.id))),
+              id,
               // a child's position is relative to its parent's top-left
               position: origin
                 ? { x: position.x - origin.x, y: position.y - origin.y }
@@ -625,6 +780,9 @@ function Flow() {
             multiSelectionKeyCode={["Meta", "Control"]}
             selectionMode="partial"
           >
+            {/* keeps every rider on the edge it was dropped on */}
+            <TubeFollower />
+
             <Background variant="lines" gap={GRID} size={1} />
             <MiniMap />
             <Controls />
