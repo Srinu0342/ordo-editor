@@ -14,6 +14,8 @@ import {
 import Sidebar from "./components/Sidebar.jsx";
 import Toolbar from "./components/Toolbar.jsx";
 import ImportDialog from "./components/ImportDialog.jsx";
+import AlignmentGuides from "./components/AlignmentGuides.jsx";
+import { alignRect, GUIDE_SNAP_PX } from "./alignment.js";
 import {
   nodeTypes,
   GROUP_TYPES,
@@ -102,8 +104,9 @@ function Flow() {
   const [panel, setPanel] = useState("nodes");
   const [edgeStyle, setEdgeStyle] = useState(DEFAULT_EDGE_STYLE);
   const [importOpen, setImportOpen] = useState(false);
+  const [guides, setGuides] = useState([]);
 
-  const { screenToFlowPosition, toObject, getInternalNode, fitView } =
+  const { screenToFlowPosition, toObject, getInternalNode, fitView, getZoom } =
     useReactFlow();
 
   // Window-level shortcuts read the graph through refs: binding the listener to
@@ -151,6 +154,76 @@ function Flow() {
       };
     },
     [getInternalNode],
+  );
+
+  // Alignment guides. Drag frames are intercepted BEFORE React Flow applies
+  // them: the moving selection is lined up as one box against every node that
+  // is not travelling with it, and the same nudge is added to each dragged
+  // position so the selection keeps its shape. Grid snap has already run by
+  // now, so an alignment wins over the grid — that is the point of asking.
+  const onNodesChangeAligned = useCallback(
+    (changes) => {
+      const drags = changes.filter(
+        (c) => c.type === "position" && c.dragging && c.position,
+      );
+      if (!drags.length) {
+        onNodesChange(changes);
+        return;
+      }
+
+      // Where each dragged node WOULD land, in absolute coordinates. Its
+      // parent is not moving (React Flow drops children of a moving parent),
+      // so last frame's parent offset still holds.
+      const offsets = new Map();
+      const landing = [];
+      for (const c of drags) {
+        const internal = getInternalNode(c.id);
+        if (!internal) continue;
+        const abs = internal.internals.positionAbsolute;
+        const off = {
+          x: abs.x - internal.position.x,
+          y: abs.y - internal.position.y,
+        };
+        offsets.set(c.id, off);
+        landing.push({
+          x: c.position.x + off.x,
+          y: c.position.y + off.y,
+          width: internal.measured?.width ?? 0,
+          height: internal.measured?.height ?? 0,
+        });
+      }
+
+      const moving = withDescendants(
+        graphRef.current.nodes,
+        new Set(drags.map((c) => c.id)),
+      );
+      const others = [];
+      for (const n of graphRef.current.nodes) {
+        if (moving.has(n.id) || n.hidden) continue;
+        const r = absRect(n.id);
+        if (r && r.width && r.height) others.push(r);
+      }
+
+      const box = unionRect(landing);
+      const { dx, dy, guides: next } = box
+        ? alignRect(box, others, GUIDE_SNAP_PX / getZoom())
+        : { dx: 0, dy: 0, guides: [] };
+
+      setGuides(next);
+      onNodesChange(
+        dx || dy
+          ? changes.map((c) =>
+              offsets.has(c.id) && c.type === "position" && c.dragging
+                ? {
+                    ...c,
+                    position: { x: c.position.x + dx, y: c.position.y + dy },
+                  }
+                : c,
+            )
+          : changes,
+      );
+    },
+    [onNodesChange, getInternalNode, absRect, getZoom],
   );
 
   // innermost group that fully contains `rect`. Everything in `skipIds`, and
@@ -391,6 +464,7 @@ function Flow() {
     (_event, _node, draggedNodes) => {
       // queued first, so the flag is gone before we re-parent
       markDropTargets(new Set());
+      setGuides([]);
 
       setNodes((nds) => {
         const targets = dropTargets(draggedNodes, nds);
@@ -763,13 +837,16 @@ function Flow() {
             edges={edges}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
-            onNodesChange={onNodesChange}
+            onNodesChange={onNodesChangeAligned}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onNodeDrag={onNodeDrag}
             onNodeDragStop={onNodeDragStop}
             connectionMode="loose"
-            fitView={initialNodes.length > 0}
+            // A sequence diagram is tall out of all proportion to a flowchart.
+            // React Flow's default floor of 0.5 stops fitView ever fitting one,
+            // so the canvas would open on a corner of it.
+            minZoom={0.1}
             snapToGrid
             snapGrid={[GRID, GRID]}
             deleteKeyCode={["Backspace", "Delete"]}
@@ -782,6 +859,7 @@ function Flow() {
           >
             {/* keeps every rider on the edge it was dropped on */}
             <TubeFollower />
+            <AlignmentGuides guides={guides} />
 
             <Background variant="lines" gap={GRID} size={1} />
             <MiniMap />
