@@ -1,7 +1,7 @@
 import { useLayoutEffect } from "react";
 import { useReactFlow, useStore } from "@xyflow/react";
 import { edgePathEl, pointAt } from "../edges/attach.js";
-import { TUBE_TYPE, TUBE_SIZE } from "./TubeNode.jsx";
+import { TUBE_TYPE, TUBE_SIZE } from "./tube.js";
 
 // The half of the attachment that runs every frame.
 //
@@ -11,9 +11,19 @@ import { TUBE_TYPE, TUBE_SIZE } from "./TubeNode.jsx";
 // every rider's position from its edge whenever anything that could have moved
 // an edge has moved.
 //
-// The rider stores only `{ edgeId, t }`. Position is never the source of truth,
-// which is why a reroute, a resize, a dragged endpoint or a viewport change all
-// come out right without any of them being handled as a case.
+// The rider stores only `{ edgeId, t }`, plus an optional `shift`. Position is
+// never the source of truth, which is why a reroute, a resize, a dragged
+// endpoint or a viewport change all come out right without any of them being
+// handled as a case.
+//
+// `shift` sets a rider off to one side of its edge, in px: positive is to the
+// left of the direction of travel, which is east of a lifeline running down the
+// canvas. It is how a re-entrant activation sits half a bar over from the one
+// it nests in, the way UML draws it.
+//
+// A rider can sit inside a group — an imported diagram puts its bars in the
+// same group as the lifelines they ride. The edge gives an absolute point; the
+// position written back is relative to the group, like any child's.
 
 // One string covering everything that can move a rider: absolute positions and
 // measured sizes of every node, the edge list with each edge's route, and the
@@ -26,7 +36,7 @@ const geometrySignal = (s) => {
     const p = node.internals.positionAbsolute;
     acc += `${id}:${p.x},${p.y},${node.measured?.width},${node.measured?.height}`;
     const attach = node.data?.attach;
-    if (attach) acc += `@${attach.edgeId},${attach.t}`;
+    if (attach) acc += `@${attach.edgeId},${attach.t},${attach.shift ?? 0}`;
     acc += ";";
   }
   acc += "|";
@@ -40,7 +50,7 @@ const geometrySignal = (s) => {
 const EPS = 0.25;
 
 export default function TubeFollower() {
-  const { setNodes, getNodes, getEdges } = useReactFlow();
+  const { setNodes, getNodes, getEdges, getInternalNode } = useReactFlow();
   const signal = useStore(geometrySignal);
 
   useLayoutEffect(() => {
@@ -71,8 +81,13 @@ export default function TubeFollower() {
 
       const w = node.measured?.width ?? node.style?.width ?? TUBE_SIZE[0];
       const h = node.measured?.height ?? node.style?.height ?? TUBE_SIZE[1];
-      const x = at.x - w / 2;
-      const y = at.y - h / 2;
+      const shift = attach.shift ?? 0;
+      const rad = (at.angle * Math.PI) / 180;
+      const origin = node.parentId
+        ? getInternalNode(node.parentId)?.internals.positionAbsolute
+        : null;
+      const x = at.x - w / 2 + shift * Math.sin(rad) - (origin?.x ?? 0);
+      const y = at.y - h / 2 - shift * Math.cos(rad) - (origin?.y ?? 0);
 
       const turned = Math.abs((attach.angle ?? 0) - at.angle) > 0.05;
       if (
@@ -103,7 +118,7 @@ export default function TubeFollower() {
         };
       }),
     );
-  }, [signal, getNodes, getEdges, setNodes]);
+  }, [signal, getNodes, getEdges, getInternalNode, setNodes]);
 
   return null;
 }

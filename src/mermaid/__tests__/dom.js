@@ -1,0 +1,24 @@
+// TEST-ONLY. Nothing outside __tests__ may import this; production.test.js
+// checks that nothing does.
+//
+// Mermaid's sequence parser reaches for a DOM in a few places a browser always
+// has and Node does not: DOMPurify for `title` and `box` labels, a CSS colour
+// check for `box` fills. This hands Node one before Mermaid loads, so it must
+// be imported ahead of anything that imports Mermaid.
+import { JSDOM } from "jsdom";
+
+export const dom = new JSDOM("<!DOCTYPE html><html><body></body></html>");
+
+globalThis.window = dom.window;
+globalThis.document = dom.window.document;
+globalThis.Option = dom.window.Option;
+globalThis.CSSStyleSheet = dom.window.CSSStyleSheet;
+
+// jsdom implements the DOM but no SVG geometry. Only the oracle needs this —
+// it runs Mermaid's real renderer, which measures every label.
+export function shimTextGeometry() {
+  dom.window.SVGElement.prototype.getBBox = function () {
+    const text = this.textContent ?? "";
+    return { x: 0, y: 0, width: text.length * 8, height: 20 };
+  };
+}

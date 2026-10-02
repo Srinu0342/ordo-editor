@@ -623,6 +623,49 @@ const ANNO = {
       ];
     },
   },
+  note: {
+    label: "Note",
+    size: [160, 64],
+    draw: (w, h) => {
+      const f = n(Math.min(12, w * 0.2, h * 0.3)); // the folded corner
+      return [
+        path(
+          `M1 1 H${n(w - 1 - f)} L${n(w - 1)} ${n(1 + f)} V${n(h - 1)} H1 Z`,
+          { fill: "note.fill" },
+        ),
+        path(`M${n(w - 1 - f)} 1 V${n(1 + f)} H${n(w - 1)}`, {
+          fill: "none",
+          width: 1.25,
+        }),
+        label(10, 6, n(w - 20), n(h - 12), { size: 13, weight: 400 }),
+      ];
+    },
+  },
+  // The UML stick figure: a sequence diagram's `actor`. The name sits under
+  // the figure rather than inside it.
+  person: {
+    label: "Actor",
+    size: [96, 96],
+    draw: (w, h) => {
+      const band = n(Math.max(18, h * 0.36));
+      const fh = h - band - 2; // the figure's height
+      const cx = n(w / 2);
+      const r = n(fh * 0.16);
+      const neck = 1 + 2 * r;
+      const hip = fh * 0.66;
+      const arms = neck + (hip - neck) * 0.3;
+      return [
+        ellipse(cx, n(1 + r), r, r),
+        path(
+          `M${cx} ${n(neck)} V${n(hip)}` +
+            ` M${n(cx - fh * 0.3)} ${n(arms)} H${n(cx + fh * 0.3)}` +
+            ` M${n(cx - fh * 0.24)} ${n(fh)} L${cx} ${n(hip)} L${n(cx + fh * 0.24)} ${n(fh)}`,
+          { fill: "none" },
+        ),
+        label(4, n(h - band), n(w - 8), n(band - 2)),
+      ];
+    },
+  },
 };
 
 // ---------------------------------------------------------------------------

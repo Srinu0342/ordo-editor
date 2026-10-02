@@ -7,17 +7,26 @@ import {
   useReactFlow,
   useUpdateNodeInternals,
 } from "@xyflow/react";
-import { rect, rule } from "../ops.js";
 import { walk } from "../render/reactWalker.jsx";
 import { nodeTheme } from "./chrome.jsx";
+import {
+  TUBE_SIZE,
+  drawTube,
+  hasTaps,
+  stepTaps,
+  tapCount,
+  tapTop,
+} from "./tube.js";
 
-// The tube: a length of timeline with as many tap-off points as you want.
+// The tube: a length of timeline with as many tap-off points as you want — on a
+// sequence diagram, the activation bar riding a lifeline.
 //
 // Two things make it unlike every other node here. It carries no label — the
 // tube is a track, and the meaning lives on whatever connects to it — and its
-// handle count is DATA, not geometry baked into a component. `slots` is the
-// single number both the tick marks and the handles derive from, so a tap can
-// never drift away from the mark drawn under it.
+// handle count is DATA, not geometry baked into a component. The tap list
+// (evenly spread `slots`, or `taps` pinned in px; see tube.js) is the single
+// source both the tick marks and the handles derive from, so a tap can never
+// drift away from the mark drawn under it.
 //
 // Its third difference lives outside this file: `data.attach` lets it ride an
 // edge. See edges/attach.js for the geometry and TubeFollower.jsx for the
@@ -34,15 +43,6 @@ import { nodeTheme } from "./chrome.jsx";
 // So a tube rotated 90° sits across whatever it is on, and stays across it
 // through a reroute.
 
-export const TUBE_TYPE = "tube";
-
-// Thickness × length. Vertical is the natural pose, so length is the height.
-export const TUBE_SIZE = [26, 220];
-
-const DEFAULT_SLOTS = 3;
-const MIN_SLOTS = 1;
-const MAX_SLOTS = 32;
-
 // Rotating the long axis onto the tangent: CSS rotate(A) sends the tube's own
 // +Y down the direction (−sin A, cos A), which lines up with a tangent of θ at
 // A = θ − 90.
@@ -50,33 +50,12 @@ const ALONG = -90;
 
 const SNAP_STEP = 15;
 
-export const slotCount = (data) =>
-  Math.min(
-    MAX_SLOTS,
-    Math.max(MIN_SLOTS, Math.round(data?.slots ?? DEFAULT_SLOTS)),
-  );
-
-// Slot i's position along the tube, as a fraction of its length. Centred in its
-// share rather than spread end to end, so the first and last taps sit clear of
-// the caps instead of on top of them.
-export const slotAt = (i, n) => (i + 0.5) / n;
-
 // Degrees, folded into (−180, 180]. Keeps a grip dragged round and round from
 // accumulating a turn count nobody asked for.
 const norm = (deg) => {
   const d = (((deg + 180) % 360) + 360) % 360;
   return d - 180;
 };
-
-const draw = (w, h, n) => [
-  rect(1, 1, w - 2, h - 2, {
-    rx: Math.min(w / 2 - 1, h / 2 - 1),
-    fill: "node.shade",
-  }),
-  ...Array.from({ length: n }, (_, i) =>
-    rule(3, slotAt(i, n) * h, w - 3, slotAt(i, n) * h),
-  ),
-];
 
 const chip = {
   font: "inherit",
@@ -95,11 +74,15 @@ export default function TubeNode({ id, data, selected, width, height }) {
   const updateInternals = useUpdateNodeInternals();
   const boxRef = useRef(null);
 
-  const n = slotCount(data);
+  const n = tapCount(data);
   // `|| default` rather than `?? default`: React Flow reports 0 for a frame
   // before it has measured, and a zero-width tube draws a negative rectangle.
   const w = Math.max(4, width || TUBE_SIZE[0]);
   const h = Math.max(4, height || TUBE_SIZE[1]);
+
+  // Pinned taps can move without their count changing, and a handle React Flow
+  // has not re-measured still terminates its edges at the old spot.
+  const tapKey = hasTaps(data) ? data.taps.join(",") : "";
 
   const attach = data?.attach;
   const rotation = data?.rotation ?? 0;
@@ -115,10 +98,10 @@ export default function TubeNode({ id, data, selected, width, height }) {
   const { marks } = useMemo(
     () =>
       walk(
-        draw(w, h, n),
+        drawTube(w, h, data),
         attach ? { ...theme, "node.stroke": theme["node.accent"] } : theme,
       ),
-    [w, h, n, theme, attach],
+    [w, h, data, theme, attach],
   );
 
   // Handles that appear, move or rotate are invisible to React Flow until it
@@ -126,7 +109,7 @@ export default function TubeNode({ id, data, selected, width, height }) {
   // wrong place.
   useEffect(() => {
     updateInternals(id);
-  }, [id, n, angle, w, h, updateInternals]);
+  }, [id, n, tapKey, angle, w, h, updateInternals]);
 
   const patch = useCallback(
     (fn) =>
@@ -137,8 +120,8 @@ export default function TubeNode({ id, data, selected, width, height }) {
   );
 
   const setSlots = useCallback(
-    (delta) => patch((d) => ({ ...d, slots: slotCount(d) + delta })),
-    [patch],
+    (delta) => patch((d) => stepTaps(d, delta, h)),
+    [patch, h],
   );
 
   const detach = useCallback(
@@ -206,7 +189,10 @@ export default function TubeNode({ id, data, selected, width, height }) {
         color={theme["node.stroke.selected"]}
       />
 
-      <NodeToolbar isVisible={selected} position={Position.Right} offset={26}>
+      {/* No isVisible: React Flow then shows it only while this tube is the
+          one node selected. With a whole diagram selected, a toolbar per bar
+          would bury the diagram. */}
+      <NodeToolbar position={Position.Right} offset={26}>
         <div
           style={{
             display: "flex",
@@ -312,7 +298,7 @@ export default function TubeNode({ id, data, selected, width, height }) {
         )}
 
         {Array.from({ length: n }, (_, i) => {
-          const top = `${slotAt(i, n) * 100}%`;
+          const top = tapTop(data, i);
           return (
             <Fragment key={i}>
               <Handle

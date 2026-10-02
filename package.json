@@ -2,8 +2,9 @@
   "name": "ordo-editor",
   "version": "1.0.0",
   "main": "index.js",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --test \"src/**/__tests__/*.test.js\"",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"
@@ -15,12 +16,13 @@
   "dependencies": {
     "@tisoap/react-flow-smart-edge": "^5.0.0",
     "@xyflow/react": "^12.11.6",
-    "mermaid": "^12.0.0",
+    "mermaid": "12.0.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^6.1.1",
+    "jsdom": "^29.1.1",
     "vite": "^8.2.2"
   }
 }

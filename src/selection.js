@@ -142,11 +142,16 @@ export function copySelection({ nodes, edges, absRect }) {
  * Internal references are remapped, never reused: parentId points at the copy
  * of the parent, and an edge reconnects the copies of its endpoints. Roots move
  * by (dx, dy); children keep their offset inside their parent, which moves for
- * them. Everything comes back `selected`, so a paste leaves you holding what
- * you just pasted.
+ * them.
+ *
+ * The roots come back `selected`, with the edges that touch them, so a paste
+ * leaves you holding what you just pasted. Children are held through their
+ * parent rather than selected themselves — a pasted diagram is one selected
+ * group, not every bar and frame in it showing its own selection chrome.
  */
 export function cloneGraph(clip, { newNodeId, newEdgeId, dx = 0, dy = 0 }) {
   const idMap = new Map(clip.nodes.map((n) => [n.id, newNodeId()]));
+  const roots = new Set(clip.nodes.filter((n) => !n.parentId).map((n) => n.id));
 
   // Edges first, so a node that REFERENCES an edge — a tube riding one — can be
   // pointed at the copy instead of the original.
@@ -158,7 +163,7 @@ export function cloneGraph(clip, { newNodeId, newEdgeId, dx = 0, dy = 0 }) {
       id: newEdgeId(source, target),
       source,
       target,
-      selected: true,
+      selected: roots.has(e.source) || roots.has(e.target),
     };
   });
 
@@ -177,7 +182,7 @@ export function cloneGraph(clip, { newNodeId, newEdgeId, dx = 0, dy = 0 }) {
       ...(parentId ? { parentId } : {}),
       position,
       data: reattach(copy.data, edgeMap),
-      selected: true,
+      selected: !parentId,
     };
   });
 

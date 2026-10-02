@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 // Gets Mermaid source INTO the app — paste it, drop a file on it, or browse for
-// one. Nothing here knows what Mermaid means; it hands the raw text to
-// `onImport` and closes. Whatever converts that text lives elsewhere.
+// one. Nothing here knows what Mermaid means. `describe` (from whoever opened
+// the dialog) says what the text is as soon as it arrives — which kind of
+// diagram, and whether it can be imported — and `onImport` converts it. The
+// dialog closes once the import has landed; if it fails, the reason stays on
+// screen and so does the text.
 
 const ACCEPT = ".mmd,.mermaid,.md,.txt";
 
@@ -11,11 +14,12 @@ const PLACEHOLDER = `flowchart TD
   B -- yes --> C[Ship it]
   B -- no --> A`;
 
-export default function ImportDialog({ open, onClose, onImport }) {
+export default function ImportDialog({ open, onClose, onImport, describe }) {
   const [text, setText] = useState("");
   const [dragging, setDragging] = useState(false);
   const [fileName, setFileName] = useState("");
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   const fileRef = useRef(null);
   const areaRef = useRef(null);
 
@@ -26,9 +30,17 @@ export default function ImportDialog({ open, onClose, onImport }) {
     setFileName("");
     setError("");
     setDragging(false);
+    setBusy(false);
     const id = requestAnimationFrame(() => areaRef.current?.focus());
     return () => cancelAnimationFrame(id);
   }, [open]);
+
+  // { ok, label } — read off the text itself, so a dropped file says what it
+  // is before anyone presses Import.
+  const found = useMemo(
+    () => (describe && text.trim() ? describe(text) : null),
+    [describe, text],
+  );
 
   const readFile = useCallback((file) => {
     if (!file) return;
@@ -42,21 +54,43 @@ export default function ImportDialog({ open, onClose, onImport }) {
     reader.readAsText(file);
   }, []);
 
-  const submit = useCallback(() => {
+  const submit = useCallback(async () => {
     const source = text.trim();
     if (!source) {
       setError("Paste some Mermaid text, or drop a file in.");
       areaRef.current?.focus();
       return;
     }
-    onImport(source, { fileName });
-    onClose();
-  }, [text, fileName, onImport, onClose]);
+    if (found && !found.ok) {
+      setError(found.label);
+      return;
+    }
+    if (busy) return;
+
+    setBusy(true);
+    setError("");
+    try {
+      await onImport(source, { fileName });
+      onClose();
+    } catch (err) {
+      setError(err?.message || "The import failed.");
+    } finally {
+      setBusy(false);
+    }
+  }, [text, fileName, found, busy, onImport, onClose]);
 
   if (!open) return null;
 
   const empty = text.trim() === "";
+  const blocked = empty || busy || (found ? !found.ok : false);
   const lineCount = text ? text.split("\n").length : 0;
+  const status = [
+    fileName,
+    lineCount ? `${lineCount} lines` : "",
+    found?.label ?? "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <div
@@ -314,19 +348,19 @@ export default function ImportDialog({ open, onClose, onImport }) {
             </button>
 
             <span
+              title={error || status}
               style={{
-                color: error ? "#dc2626" : "#94a3b8",
+                color: error
+                  ? "#dc2626"
+                  : found && !found.ok
+                    ? "#b45309"
+                    : "#94a3b8",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
               }}
             >
-              {error ||
-                (fileName
-                  ? `${fileName} · ${lineCount} lines`
-                  : empty
-                    ? "Nothing pasted yet"
-                    : `${lineCount} lines`)}
+              {error || (empty ? "Nothing pasted yet" : status)}
             </span>
           </div>
         </div>
@@ -366,7 +400,7 @@ export default function ImportDialog({ open, onClose, onImport }) {
           <button
             type="button"
             onClick={submit}
-            disabled={empty}
+            disabled={blocked}
             style={{
               height: 32,
               padding: "0 16px",
@@ -376,14 +410,14 @@ export default function ImportDialog({ open, onClose, onImport }) {
               fontSize: 13,
               fontWeight: 600,
               color: "#fff",
-              cursor: empty ? "not-allowed" : "pointer",
-              background: empty
+              cursor: busy ? "progress" : blocked ? "not-allowed" : "pointer",
+              background: blocked
                 ? "#c7d2fe"
                 : "linear-gradient(180deg,#6366f1,#4f46e5)",
-              boxShadow: empty ? "none" : "0 1px 2px rgba(79,70,229,.45)",
+              boxShadow: blocked ? "none" : "0 1px 2px rgba(79,70,229,.45)",
             }}
           >
-            Import
+            {busy ? "Importing…" : "Import"}
           </button>
         </footer>
       </div>

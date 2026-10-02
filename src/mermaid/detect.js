@@ -1,0 +1,105 @@
+import mermaid from "./mermaid.js";
+
+// What a piece of Mermaid text IS, decided before anything is drawn.
+//
+// The type picks the whole pipeline — a flowchart is harvested from Mermaid's
+// own dagre run, a sequence diagram is rebuilt from its parse alone — so it is
+// read with Mermaid's own detector, the one `render` uses, rather than by
+// sniffing the first line: front-matter, `%%{init}%%` directives and comments
+// can all come before the keyword, and the detector already knows to skip them.
+
+// detectType's answer → the importer for it. `graph` and `flowchart` both come
+// back as flowchart-v2; the other two are the older and the ELK spellings.
+const FAMILY = {
+  flowchart: "flowchart",
+  "flowchart-v2": "flowchart",
+  "flowchart-elk": "flowchart",
+  sequence: "sequence",
+};
+
+// For saying what was found, including the kinds with no importer yet.
+const NAMES = {
+  flowchart: "Flowchart",
+  sequence: "Sequence diagram",
+  class: "Class diagram",
+  classDiagram: "Class diagram",
+  state: "State diagram",
+  stateDiagram: "State diagram",
+  er: "ER diagram",
+  gantt: "Gantt chart",
+  pie: "Pie chart",
+  journey: "User journey",
+  mindmap: "Mindmap",
+  timeline: "Timeline",
+  gitGraph: "Git graph",
+  c4: "C4 diagram",
+  requirement: "Requirement diagram",
+  quadrantChart: "Quadrant chart",
+  xychart: "XY chart",
+  sankey: "Sankey diagram",
+  packet: "Packet diagram",
+  block: "Block diagram",
+  architecture: "Architecture diagram",
+  kanban: "Kanban board",
+  radar: "Radar chart",
+  treemap: "Treemap",
+};
+
+// A Markdown file carries its diagram in a fenced block. The first ```mermaid
+// (or ~~~mermaid) fence is the diagram; without one, the text is the diagram.
+const FENCE =
+  /^[ \t]*(`{3,}|~{3,})[ \t]*mermaid\b[^\n]*\n([\s\S]*?)^[ \t]*\1[ \t]*$/gm;
+
+export function mermaidSource(text) {
+  const raw = String(text ?? "");
+  FENCE.lastIndex = 0;
+  const blocks = [...raw.matchAll(FENCE)];
+  return blocks.length
+    ? { source: blocks[0][2], blocks: blocks.length }
+    : { source: raw, blocks: 0 };
+}
+
+// Front-matter — a `---` block ahead of the keyword — can name a diagram. Mermaid
+// only applies it during a full render, so a parse alone loses it; it is read
+// here instead, for the name of the group the import arrives in.
+const FRONT = /^\s*---[ \t]*\n([\s\S]*?)\n[ \t]*---[ \t]*(?:\n|$)/;
+const TITLE = /^[ \t]*title[ \t]*:[ \t]*(.*?)[ \t]*$/m;
+
+export function frontMatterTitle(source) {
+  const block = FRONT.exec(String(source ?? ""))?.[1];
+  const raw = block ? TITLE.exec(block)?.[1] : null;
+  return raw ? raw.replace(/^(["'])(.*)\1$/, "$2").trim() || null : null;
+}
+
+/**
+ * { family, type, source, label, blocks, title }
+ *
+ * `family` is the importer to use — "flowchart", "sequence", or null when
+ * there is none. `type` is Mermaid's own name for what it found (null when it
+ * found nothing it knows). `source` is the diagram text itself, out of its
+ * Markdown fence if it had one; `blocks` counts the fences. `title` is the
+ * front-matter title, when there is one.
+ */
+export function detectDiagram(text) {
+  const { source, blocks } = mermaidSource(text);
+  const title = frontMatterTitle(source);
+  if (!source.trim())
+    return { family: null, type: null, source, blocks, title, label: "Nothing to import" };
+
+  let type = null;
+  try {
+    type = mermaid.detectType(source);
+  } catch {
+    // UnknownDiagramError: nothing Mermaid recognises
+  }
+
+  const family = FAMILY[type] ?? null;
+  const name = NAMES[family ?? type] ?? type;
+  const label = !type
+    ? "Not a Mermaid diagram"
+    : family
+      ? name
+      : `${name} — no importer yet`;
+
+  return { family, type, source, blocks, title, label };
+}

@@ -19,6 +19,8 @@ export const LIGHT = {
   "container.stroke": "#94a3b8",
   "container.band": "#f8fafc",
 
+  "note.fill": "#fef9c3",
+
   "edge.stroke": "#0f172a",
   "canvas.bg": "#ffffff",
   "canvas.grid": "#e2e8f0",
@@ -33,6 +35,7 @@ export const DARK = {
   "node.ink.muted": "#94a3b8",
   "node.shade": "#1e293b",
   "container.band": "#111827",
+  "note.fill": "#3a3416",
   "edge.stroke": "#e2e8f0",
   "canvas.bg": "#0f151b",
   "canvas.grid": "#1e293b",

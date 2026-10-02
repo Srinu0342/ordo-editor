@@ -1,23 +1,27 @@
-import mermaid from 'mermaid';
+import mermaid from "./mermaid.js";
 
-mermaid.registerLayoutLoaders([
-  { name: 'ordo', loader: async () => await import('./ordo-layout.js') },
-]);
-
-mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', layout: 'ordo' });
+// Flowchart import, part one: PARSE PLUS HARVEST. A flowchart's positions come
+// out of dagre — a solver no rule can reproduce — so the diagram is rendered
+// for real and the positioned model is kept on the way through the `ordo`
+// layout loader (ordo-layout.js). The sequence importer is the opposite shape;
+// see sequence.js.
 
 export const getMermaidLayoutForOrdo = async (src, graphId) => {
-  try {
-    await mermaid.render(graphId, src);
+  // Parsed first so a syntax error surfaces as itself, before render can paint
+  // Mermaid's error diagram into the page.
+  await mermaid.parse(src);
 
-    const diagram = await mermaid.mermaidAPI.getDiagramFromText(src);
+  // The layout module leaves its model on a global. Cleared first: a diagram
+  // that never reaches the loader must come back empty, not as whatever was
+  // imported last.
+  globalThis.__ordo_mermaid = undefined;
+  await mermaid.render(graphId, src);
 
-    const db = diagram.db;
-    
-    const subgraphs = db.getSubGraphs?.();
+  const layout = globalThis.__ordo_mermaid;
+  if (!layout) return null;
 
-    return { mermaid: globalThis.__ordo_mermaid, subgraphs };
-  } catch (error) {
-    console.error('Error rendering Mermaid layout:', error);
-  }
+  const diagram = await mermaid.mermaidAPI.getDiagramFromText(src);
+  const subgraphs = diagram.db.getSubGraphs?.();
+
+  return { mermaid: layout, subgraphs };
 };

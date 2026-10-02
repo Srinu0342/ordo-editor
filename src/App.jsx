@@ -8,6 +8,7 @@ import {
   MiniMap,
   useNodesState,
   useEdgesState,
+  useNodesInitialized,
   addEdge,
 } from "@xyflow/react";
 
@@ -36,7 +37,13 @@ import {
 } from "./edges/attach.js";
 import { edgeTypes, EdgeMarkers } from "./edges/index.js";
 import { DEFAULT_EDGE_STYLE, applyEdgeStyle, newEdge } from "./edgeStyle.js";
-import { getMermaidLayoutForOrdo, toOrdo } from "./mermaid";
+import {
+  detectDiagram,
+  diagramName,
+  groupDiagram,
+  groupId,
+  importMermaid,
+} from "./mermaid";
 import {
   copySelection,
   cloneGraph,
@@ -59,9 +66,25 @@ const nextId = (taken) => {
 
 const GRID = 10;
 
+// What the import dialog shows the moment text lands in it: the diagram type
+// Mermaid reads it as, and whether there is an importer for that type.
+const describeMermaid = (text) => {
+  const found = detectDiagram(text);
+  return {
+    ok: Boolean(found.family),
+    label:
+      found.blocks > 1
+        ? `${found.label} (first of ${found.blocks} diagrams)`
+        : found.label,
+  };
+};
+
 // Where a paste lands when the pointer is off-canvas (keyboard-only paste) and
 // what a duplicate is nudged by. Grid-aligned, so pasted nodes stay snapped.
 const PASTE_NUDGE = 2 * GRID;
+
+// Between an imported diagram and whatever is already on the canvas.
+const IMPORT_GAP = 8 * GRID;
 
 const snap = (v) => Math.round(v / GRID) * GRID;
 
@@ -439,10 +462,16 @@ function Flow() {
           : null;
 
         if (hit) {
+          // Dropped back on the edge it was riding, a rider keeps its sideways
+          // offset: a nested activation moved along its lifeline stays nested.
+          const was = rider.data?.attach;
           attachments.set(rider.id, {
             edgeId: hit.edgeId,
             t: hit.t,
             angle: hit.angle,
+            ...(was?.shift && was.edgeId === hit.edgeId
+              ? { shift: was.shift }
+              : {}),
           });
         } else {
           released.add(rider.id);
@@ -664,42 +693,75 @@ function Flow() {
     setEdges,
   ]);
 
-  // The dialog collects the source; the extractor turns it into a Mermaid
-  // layout; `toOrdo` restates that layout in our own vocabulary. Import
-  // REPLACES the canvas rather than merging — a half-merged diagram is worse
-  // than either outcome, and undo still gets you back.
+  // After an import the viewport is fitted to it once EVERY new node has been
+  // measured. A fit fires on the first measurement it sees and frames only the
+  // nodes measured by then — and a tube re-measuring its own handles gets in
+  // first, so an early fit frames one lifeline and leaves the rest off-screen.
+  const nodesInitialized = useNodesInitialized();
+  const fitPending = useRef(null);
+  useEffect(() => {
+    const id = fitPending.current;
+    if (!id || !nodesInitialized) return;
+    fitPending.current = null;
+    fitView({ nodes: [{ id }], padding: 0.2 });
+  }, [nodesInitialized, fitView]);
+
+  // Where the next import lands: to the right of everything already on the
+  // canvas, top-aligned with it, so diagrams queue up side by side instead of
+  // landing on each other.
+  const besideContent = useCallback(() => {
+    const rects = graphRef.current.nodes
+      .filter((n) => !n.parentId)
+      .map((n) => {
+        const [width, height] = sizeOfNode(n);
+        const r = absRect(n.id);
+        return r
+          ? { ...r, width: r.width || width, height: r.height || height }
+          : { ...n.position, width, height };
+      });
+    const box = unionRect(rects);
+    return box
+      ? { x: snap(box.x + box.width + IMPORT_GAP), y: snap(box.y) }
+      : { x: 0, y: 0 };
+  }, [absRect]);
+
+  // The dialog collects the source; `importMermaid` reads what KIND of diagram
+  // it is and hands it to the one importer for that kind — dagre's layout for
+  // a flowchart, Ordo's own rows and columns for a sequence diagram. The
+  // diagram is ADDED to the canvas as one group, named for its title or as the
+  // next mermaidN, so it can be selected and moved as a unit. It arrives
+  // selected. A failure is thrown back to the dialog, which keeps it on screen.
   const onMermaidText = useCallback(
-    (source, { fileName }) => {
-      const graphId = `mermaid-${Math.random().toString(36).slice(2)}`;
+    async (source, { fileName }) => {
+      const result = await importMermaid(source);
 
-      getMermaidLayoutForOrdo(source, graphId)
-        .then((layout) => {
-          if (!layout) {
-            console.error("Mermaid import: no layout returned", { fileName });
-            return;
-          }
+      if (result.warnings.length) {
+        console.warn(
+          `Mermaid import (${result.type}${fileName ? `, ${fileName}` : ""}):`,
+          result.warnings,
+        );
+      }
 
-          const { nodes: imported, edges: importedEdges, unsupported } =
-            toOrdo(layout);
+      const present = graphRef.current.nodes;
+      const id = groupId(present);
+      const { nodes: grouped, edges: wired } = groupDiagram(result, {
+        id,
+        label: diagramName(result.title, present),
+        at: besideContent(),
+        data: { mermaid: result.type },
+      });
 
-          if (unsupported.length) {
-            console.warn(
-              "Mermaid import: drawn as rectangles, no Ordo shape for",
-              unsupported,
-            );
-          }
-
-          setNodes(imported);
-          setEdges(importedEdges);
-
-          // one frame, so the nodes are measured before the viewport is fitted
-          requestAnimationFrame(() => fitView({ padding: 0.2 }));
-        })
-        .catch((error) => {
-          console.error("Mermaid import failed", error);
-        });
+      setNodes((nds) => [
+        ...nds.map((n) => (n.selected ? { ...n, selected: false } : n)),
+        ...grouped.map((n) => (n.id === id ? { ...n, selected: true } : n)),
+      ]);
+      setEdges((eds) => [
+        ...eds.map((e) => (e.selected ? { ...e, selected: false } : e)),
+        ...wired,
+      ]);
+      fitPending.current = id;
     },
-    [setNodes, setEdges, fitView],
+    [setNodes, setEdges, besideContent],
   );
 
   const onDragOver = useCallback((event) => {
@@ -811,6 +873,7 @@ function Flow() {
         open={importOpen}
         onClose={() => setImportOpen(false)}
         onImport={onMermaidText}
+        describe={describeMermaid}
       />
 
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>

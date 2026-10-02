@@ -40,6 +40,11 @@ const STRUCTURAL = [
     label: "Timeline tube — drop it on an edge to ride it",
     svg: '<rect x="23.5" y="3" width="9" height="30" rx="4.5" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.4"/><path d="M25 8h6M25 18h6M25 28h6" stroke="#cbd5e1" stroke-width="1.2"/>',
   },
+  {
+    kind: "fragment",
+    label: "Fragment — loop, alt, opt, par frame for sequence diagrams",
+    svg: '<rect x="3" y="4" width="50" height="28" rx="1" fill="none" stroke="#94a3b8" stroke-width="1.4"/><path d="M3 4h17v6l-3 3H3z" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.2"/><path d="M3 22H53" stroke="#94a3b8" stroke-width="1.1" stroke-dasharray="3 2.5"/>',
+  },
 ];
 
 const wrapSvg = (body) =>

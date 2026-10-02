@@ -7,6 +7,17 @@ import EditableLabel from "../nodes/EditableLabel.jsx";
 // One component, parameterised by routing. Everything else arrives as style or
 // data, which is why adding a marker or a dash pattern never adds a file.
 
+// Where the label sits against the point the router hands back. On it is the
+// default: a pill on the line. A sequence message wants its line left whole,
+// so its label goes above; a self-message's router point is the far side of
+// its loop, so its label goes to the right, clear of the loop.
+const LABEL_GAP = 4;
+const PLACE = {
+  center: (x, y) => `translate(-50%, -50%) translate(${x}px, ${y}px)`,
+  above: (x, y) => `translate(-50%, -100%) translate(${x}px, ${y - LABEL_GAP}px)`,
+  right: (x, y) => `translate(0, -50%) translate(${x + LABEL_GAP}px, ${y}px)`,
+};
+
 function OrdoEdge({
   id,
   sourceX,
@@ -44,6 +55,7 @@ function OrdoEdge({
   const ms = markerUrl(data?.markerStart);
   const me = markerUrl(data?.markerEnd);
   const label = data?.label ?? "";
+  const place = PLACE[data?.labelPlacement] ?? PLACE.center;
 
   return (
     <>
@@ -62,7 +74,7 @@ function OrdoEdge({
             onChange={setLabel}
             style={{
               position: "absolute",
-              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+              transform: place(labelX, labelY),
               fontSize: 11,
               fontFamily: "system-ui, sans-serif",
               pointerEvents: "all",
