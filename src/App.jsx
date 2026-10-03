@@ -52,6 +52,7 @@ import {
   withDescendants,
   sortParentsFirst,
 } from "./selection.js";
+import { useHistory, isTyping } from "./useHistory.js";
 
 let seq = 0;
 // `taken` is the live id set: Mermaid import brings in ids we did not mint
@@ -136,6 +137,11 @@ function Flow() {
   // `nodes` would re-subscribe on every drag frame for no gain.
   const graphRef = useRef({ nodes, edges });
   graphRef.current = { nodes, edges };
+
+  // Undo and redo, kept as diffs between states of the graph. Every write lands
+  // in these two lists, whoever made it, so history watches them rather than
+  // each writer.
+  const { undo, redo } = useHistory({ nodes, edges, setNodes, setEdges });
 
   // Last pointer position over the canvas, in flow coordinates. Null whenever
   // the pointer is outside, which is what makes "paste where I'm pointing"
@@ -635,16 +641,20 @@ function Flow() {
   // Ctrl/Cmd chords. React Flow's own deleteKeyCode still handles Delete; these
   // are the ones it has no opinion about.
   useEffect(() => {
-    const isTyping = (el) =>
-      el instanceof HTMLElement &&
-      (el.isContentEditable ||
-        ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName));
-
     const onKeyDown = (event) => {
       if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
       if (isTyping(event.target)) return; // a label being edited owns its keys
 
       const key = event.key.toLowerCase();
+
+      // Shift turns undo into redo. Both wait out a held pointer, and close an
+      // edit still open before they move (see useHistory).
+      if (key === "z") {
+        event.preventDefault();
+        if (event.shiftKey) redo();
+        else undo();
+        return;
+      }
 
       if (key === "c") {
         if (copy()) event.preventDefault();
@@ -691,6 +701,8 @@ function Flow() {
     absRect,
     setNodes,
     setEdges,
+    undo,
+    redo,
   ]);
 
   // After an import the viewport is fitted to it once EVERY new node has been

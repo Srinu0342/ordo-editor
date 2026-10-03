@@ -70,7 +70,8 @@ export const sortParentsFirst = (nodes) => {
 
 // State React Flow owns and recomputes. Carrying any of it into a paste gives
 // you a node that believes it is mid-drag, or one sized from a stale measure.
-const TRANSIENT_NODE_KEYS = [
+// The undo history leaves the same keys out of every step (see history.js).
+export const TRANSIENT_NODE_KEYS = [
   "selected",
   "dragging",
   "measured",
@@ -79,14 +80,14 @@ const TRANSIENT_NODE_KEYS = [
   "resizing",
 ];
 
-const clean = (node) => {
+export const cleanNode = (node) => {
   const copy = structuredClone(node);
   for (const key of TRANSIENT_NODE_KEYS) delete copy[key];
   if (copy.data) delete copy.data.isDropTarget; // drop highlight, never content
   return copy;
 };
 
-const cleanEdge = (edge) => {
+export const cleanEdge = (edge) => {
   const copy = structuredClone(edge);
   delete copy.selected;
   return copy;
@@ -113,13 +114,13 @@ export function copySelection({ nodes, edges, absRect }) {
   const copied = nodes
     .filter((n) => ids.has(n.id))
     .map((n) => {
-      if (n.parentId && ids.has(n.parentId)) return clean(n);
+      if (n.parentId && ids.has(n.parentId)) return cleanNode(n);
 
       const rect = absRect(n.id);
       if (rect) rootRects.push(rect);
 
       const { parentId: _released, ...rest } = n;
-      return clean({
+      return cleanNode({
         ...rest,
         position: rect ? { x: rect.x, y: rect.y } : n.position,
       });
@@ -170,7 +171,7 @@ export function cloneGraph(clip, { newNodeId, newEdgeId, dx = 0, dy = 0 }) {
   const edgeMap = new Map(clip.edges.map((e, i) => [e.id, edges[i].id]));
 
   const nodes = clip.nodes.map((n) => {
-    const copy = clean(n);
+    const copy = cleanNode(n);
     const parentId = n.parentId ? idMap.get(n.parentId) : undefined;
     const position = parentId
       ? copy.position

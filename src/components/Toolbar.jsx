@@ -5,6 +5,7 @@ import {
   lineTypeOf,
 } from "../edgeStyle.js";
 import { MARKERS, MARKER_KEYS } from "../edges/index.js";
+import { HISTORY_LIMIT } from "../history.js";
 
 const MOD = navigator.platform.startsWith("Mac") ? "\u2318" : "Ctrl";
 
@@ -66,14 +67,16 @@ function MarkerSelect({ id, title, value, onChange }) {
   );
 }
 
-// The selection chip doubles as the only place the multi-select and clipboard
-// chords are written down — shortcuts nobody can see are shortcuts nobody uses.
+// The selection chip doubles as the only place the multi-select, clipboard and
+// undo chords are written down — shortcuts nobody can see are shortcuts nobody
+// uses.
 const SHORTCUTS = [
   "Shift-drag: lasso",
   `${MOD}-click: add to selection`,
   `${MOD}+A: select all`,
   `${MOD}+C / ${MOD}+X / ${MOD}+V: copy, cut, paste`,
   `${MOD}+D: duplicate`,
+  `${MOD}+Z / ${MOD}+Shift+Z: undo, redo (last ${HISTORY_LIMIT} changes)`,
 ].join("\n");
 
 export default function Toolbar({
