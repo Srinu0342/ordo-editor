@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "react-toastify";
 
 // Gets Mermaid source INTO the app — paste it, drop a file on it, or browse for
 // one. Nothing here knows what Mermaid means. `describe` (from whoever opened
 // the dialog) says what the text is as soon as it arrives — which kind of
-// diagram, and whether it can be imported — and `onImport` converts it. The
-// dialog closes once the import has landed; if it fails, the reason stays on
-// screen and so does the text.
+// diagram, whether it can be imported, and a warning when it is a kind that
+// cannot be yet — and `onImport` converts it. The dialog closes once the import
+// has landed; if it fails, the reason stays on screen and so does the text.
 
 const ACCEPT = ".mmd,.mermaid,.md,.txt";
 
@@ -23,24 +24,39 @@ export default function ImportDialog({ open, onClose, onImport, describe }) {
   const fileRef = useRef(null);
   const areaRef = useRef(null);
 
-  // Fresh sheet every time it opens, and the caret is already in the box.
+  // Fresh sheet every time it opens, and the caret is already in the box. The
+  // sheet is cleared as the dialog CLOSES: cleared on opening, the first render
+  // would still hold last time's text, and warn about it again.
   useEffect(() => {
-    if (!open) return;
-    setText("");
-    setFileName("");
-    setError("");
-    setDragging(false);
-    setBusy(false);
+    if (!open) {
+      setText("");
+      setFileName("");
+      setError("");
+      setDragging(false);
+      setBusy(false);
+      return;
+    }
     const id = requestAnimationFrame(() => areaRef.current?.focus());
     return () => cancelAnimationFrame(id);
   }, [open]);
 
-  // { ok, label } — read off the text itself, so a dropped file says what it
-  // is before anyone presses Import.
+  // { ok, label, warning } — read off the text itself, so a dropped file says
+  // what it is before anyone presses Import.
   const found = useMemo(
     () => (describe && text.trim() ? describe(text) : null),
     [describe, text],
   );
+
+  // A kind that cannot be imported yet is worth more than the status line. Its
+  // warning goes up as a toast the moment the kind is recognised — once, not
+  // per keystroke, since the warning's own text is its id — and comes down when
+  // the text turns into something else or the dialog closes.
+  const warning = open ? (found?.warning ?? null) : null;
+  useEffect(() => {
+    if (!warning) return;
+    toast.warn(warning, { toastId: warning });
+    return () => toast.dismiss(warning);
+  }, [warning]);
 
   const readFile = useCallback((file) => {
     if (!file) return;
@@ -63,6 +79,8 @@ export default function ImportDialog({ open, onClose, onImport, describe }) {
     }
     if (found && !found.ok) {
       setError(found.label);
+      // asked again after the toast has gone: raise it again
+      if (found.warning) toast.warn(found.warning, { toastId: found.warning });
       return;
     }
     if (busy) return;

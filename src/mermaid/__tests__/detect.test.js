@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { detectDiagram, importMermaid } from "../index.js";
+import { IMPORTABLE, detectDiagram, importMermaid } from "../index.js";
 import { LOUNGE } from "./fixtures.js";
 
 const family = (text) => detectDiagram(text).family;
@@ -47,8 +47,15 @@ test("other Mermaid types are named, with no importer", () => {
   const found = detectDiagram("classDiagram\n  A <|-- B");
   assert.equal(found.family, null);
   assert.equal(found.type, "classDiagram");
+  assert.equal(found.name, "Class diagram");
   assert.equal(found.label, "Class diagram — no importer yet");
   assert.equal(detectDiagram("stateDiagram-v2\n  [*] --> A").label, "State diagram — no importer yet");
+  assert.equal(detectDiagram("pie\n  \"a\": 1").name, "Pie chart");
+});
+
+test("an importable type is named too", () => {
+  assert.equal(detectDiagram("graph LR\n  A-->B").name, "Flowchart");
+  assert.equal(detectDiagram("sequenceDiagram\n  A->>B: hi").name, "Sequence diagram");
 });
 
 test("text that is not Mermaid at all is said to be so", () => {
@@ -56,11 +63,14 @@ test("text that is not Mermaid at all is said to be so", () => {
     [detectDiagram("hello world").type, detectDiagram("hello world").label],
     [null, "Not a Mermaid diagram"],
   );
+  assert.equal(detectDiagram("hello world").name, null);
   assert.equal(detectDiagram("   ").label, "Nothing to import");
+  assert.equal(detectDiagram("   ").name, null);
 });
 
 test("the router refuses what it has no importer for, by name", async () => {
   await assert.rejects(importMermaid("classDiagram\n  A <|-- B"), /Class diagram.*flowcharts and sequence diagrams/);
+  await assert.rejects(importMermaid("classDiagram\n  A <|-- B"), (err) => err.message.endsWith(IMPORTABLE));
   await assert.rejects(importMermaid("hello world"), /Not a Mermaid diagram/);
 });
 

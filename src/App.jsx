@@ -11,6 +11,7 @@ import {
   useNodesInitialized,
   addEdge,
 } from "@xyflow/react";
+import { ToastContainer } from "react-toastify";
 
 import Sidebar from "./components/Sidebar.jsx";
 import Toolbar from "./components/Toolbar.jsx";
@@ -38,6 +39,7 @@ import {
 import { edgeTypes, EdgeMarkers } from "./edges/index.js";
 import { DEFAULT_EDGE_STYLE, applyEdgeStyle, newEdge } from "./edgeStyle.js";
 import {
+  IMPORTABLE,
   detectDiagram,
   diagramName,
   groupDiagram,
@@ -68,7 +70,10 @@ const nextId = (taken) => {
 const GRID = 10;
 
 // What the import dialog shows the moment text lands in it: the diagram type
-// Mermaid reads it as, and whether there is an importer for that type.
+// Mermaid reads it as, and whether there is an importer for that type. A type
+// Mermaid knows and Ordo cannot import yet also carries a warning, which the
+// dialog raises as a toast. Text that is not Mermaid at all has no type to
+// warn about; its label says so.
 const describeMermaid = (text) => {
   const found = detectDiagram(text);
   return {
@@ -77,6 +82,10 @@ const describeMermaid = (text) => {
       found.blocks > 1
         ? `${found.label} (first of ${found.blocks} diagrams)`
         : found.label,
+    warning:
+      found.type && !found.family
+        ? `${found.name} is not supported yet. ${IMPORTABLE}`
+        : null,
   };
 };
 
@@ -950,6 +959,19 @@ export default function App() {
   return (
     <ReactFlowProvider>
       <Flow />
+      {/* One container for every toast in the app. Above the import dialog's
+          backdrop (z 2000) on its own z-index, and top-centre so that a
+          warning about the dialog lands in the column it occupies. The close
+          button is pinned in the corner over the toast's padding, so a long
+          first line needs room kept clear for it on the right. */}
+      <ToastContainer
+        position="top-center"
+        toastStyle={{
+          fontFamily: "system-ui, sans-serif",
+          fontSize: 13.5,
+          paddingRight: 30,
+        }}
+      />
     </ReactFlowProvider>
   );
 }

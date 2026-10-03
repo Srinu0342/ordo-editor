@@ -1,4 +1,4 @@
-import { detectDiagram } from "./detect.js";
+import { IMPORTABLE, detectDiagram } from "./detect.js";
 import { getMermaidLayoutForOrdo } from "./extractor.js";
 import { toOrdo } from "./toOrdo.js";
 import { getSequenceForOrdo } from "./sequence.js";
@@ -58,9 +58,7 @@ export async function importMermaid(text, { measureText } = {}) {
 
     default:
       throw new Error(
-        found.type
-          ? `${found.label}. Ordo imports flowcharts and sequence diagrams so far.`
-          : `${found.label}.`,
+        found.type ? `${found.label}. ${IMPORTABLE}` : `${found.label}.`,
       );
   }
 }

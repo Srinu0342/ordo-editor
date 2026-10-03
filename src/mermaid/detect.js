@@ -17,6 +17,10 @@ const FAMILY = {
   sequence: "sequence",
 };
 
+// What can be imported, said the same way wherever a type is turned away. It
+// sits beside FAMILY so that the two change together.
+export const IMPORTABLE = "Ordo imports flowcharts and sequence diagrams so far.";
+
 // For saying what was found, including the kinds with no importer yet.
 const NAMES = {
   flowchart: "Flowchart",
@@ -72,19 +76,20 @@ export function frontMatterTitle(source) {
 }
 
 /**
- * { family, type, source, label, blocks, title }
+ * { family, type, name, source, label, blocks, title }
  *
  * `family` is the importer to use — "flowchart", "sequence", or null when
  * there is none. `type` is Mermaid's own name for what it found (null when it
- * found nothing it knows). `source` is the diagram text itself, out of its
- * Markdown fence if it had one; `blocks` counts the fences. `title` is the
- * front-matter title, when there is one.
+ * found nothing it knows), and `name` is what to call it in a sentence ("Class
+ * diagram"). `source` is the diagram text itself, out of its Markdown fence if
+ * it had one; `blocks` counts the fences. `title` is the front-matter title,
+ * when there is one.
  */
 export function detectDiagram(text) {
   const { source, blocks } = mermaidSource(text);
   const title = frontMatterTitle(source);
   if (!source.trim())
-    return { family: null, type: null, source, blocks, title, label: "Nothing to import" };
+    return { family: null, type: null, name: null, source, blocks, title, label: "Nothing to import" };
 
   let type = null;
   try {
@@ -101,5 +106,5 @@ export function detectDiagram(text) {
       ? name
       : `${name} — no importer yet`;
 
-  return { family, type, source, blocks, title, label };
+  return { family, type, name, source, blocks, title, label };
 }
