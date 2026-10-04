@@ -1,11 +1,13 @@
+import type { CSSProperties } from "react";
 import {
   STROKE_SWATCHES,
   STROKE_WEIGHTS,
   LINE_TYPES,
   lineTypeOf,
-} from "../edgeStyle.js";
-import { MARKERS, MARKER_KEYS } from "../edges/index.js";
-import { HISTORY_LIMIT } from "../history.js";
+} from "../edgeStyle.ts";
+import type { EdgeStyle } from "../edgeStyle.ts";
+import { MARKERS, MARKER_KEYS } from "../edges/index.ts";
+import { HISTORY_LIMIT } from "../history.ts";
 
 const MOD = navigator.platform.startsWith("Mac") ? "\u2318" : "Ctrl";
 
@@ -13,7 +15,7 @@ const MOD = navigator.platform.startsWith("Mac") ? "\u2318" : "Ctrl";
 // and otherwise become the default for the next edge drawn — the behaviour
 // every drawing tool has, and the reason the strip reports which it will do.
 
-const groupStyle = { display: "flex", alignItems: "center", gap: 4 };
+const groupStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 4 };
 
 const divider = (
   <div
@@ -21,7 +23,7 @@ const divider = (
   />
 );
 
-const selectStyle = {
+const selectStyle: CSSProperties = {
   height: 28,
   borderRadius: 6,
   border: "1px solid #cbd5e1",
@@ -40,7 +42,17 @@ const MARKER_GROUPS = [
   ["er", "ER cardinality"],
 ];
 
-function MarkerSelect({ id, title, value, onChange }) {
+function MarkerSelect({
+  id,
+  title,
+  value,
+  onChange,
+}: {
+  id: string;
+  title: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
   return (
     <label style={{ ...groupStyle, color: "#64748b", fontSize: 12.5 }}>
       {title}
@@ -85,6 +97,12 @@ export default function Toolbar({
   selectedCount,
   selectedNodeCount = 0,
   onImport,
+}: {
+  value: EdgeStyle;
+  onChange: (patch: Partial<EdgeStyle>) => void;
+  selectedCount: number;
+  selectedNodeCount?: number;
+  onImport: () => void;
 }) {
   const activeType = lineTypeOf(value.dash);
   const picked = [

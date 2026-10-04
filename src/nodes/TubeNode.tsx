@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import {
   Handle,
   NodeResizer,
@@ -7,8 +8,9 @@ import {
   useReactFlow,
   useUpdateNodeInternals,
 } from "@xyflow/react";
-import { walk } from "../render/reactWalker.jsx";
-import { nodeTheme } from "./chrome.jsx";
+import type { NodeProps } from "@xyflow/react";
+import { walk } from "../render/reactWalker.tsx";
+import { nodeTheme } from "./chrome.tsx";
 import {
   TUBE_SIZE,
   drawTube,
@@ -16,7 +18,8 @@ import {
   stepTaps,
   tapCount,
   tapTop,
-} from "./tube.js";
+} from "./tube.ts";
+import type { NodeData, OrdoEdge, OrdoNode } from "../types.ts";
 
 // The tube: a length of timeline with as many tap-off points as you want — on a
 // sequence diagram, the activation bar riding a lifeline.
@@ -24,12 +27,12 @@ import {
 // Two things make it unlike every other node here. It carries no label — the
 // tube is a track, and the meaning lives on whatever connects to it — and its
 // handle count is DATA, not geometry baked into a component. The tap list
-// (evenly spread `slots`, or `taps` pinned in px; see tube.js) is the single
+// (evenly spread `slots`, or `taps` pinned in px; see tube.ts) is the single
 // source both the tick marks and the handles derive from, so a tap can never
 // drift away from the mark drawn under it.
 //
 // Its third difference lives outside this file: `data.attach` lets it ride an
-// edge. See edges/attach.js for the geometry and TubeFollower.jsx for the
+// edge. See edges/attach.ts for the geometry and TubeFollower.tsx for the
 // per-frame commit.
 //
 // ORIENTATION. The tube is drawn vertically — long axis down the Y of its own
@@ -52,12 +55,12 @@ const SNAP_STEP = 15;
 
 // Degrees, folded into (−180, 180]. Keeps a grip dragged round and round from
 // accumulating a turn count nobody asked for.
-const norm = (deg) => {
+const norm = (deg: number) => {
   const d = (((deg + 180) % 360) + 360) % 360;
   return d - 180;
 };
 
-const chip = {
+const chip: CSSProperties = {
   font: "inherit",
   fontSize: 11,
   lineHeight: 1,
@@ -69,10 +72,16 @@ const chip = {
   color: "#475569",
 };
 
-export default function TubeNode({ id, data, selected, width, height }) {
-  const { setNodes } = useReactFlow();
+export default function TubeNode({
+  id,
+  data,
+  selected,
+  width,
+  height,
+}: NodeProps<OrdoNode>) {
+  const { setNodes } = useReactFlow<OrdoNode, OrdoEdge>();
   const updateInternals = useUpdateNodeInternals();
-  const boxRef = useRef(null);
+  const boxRef = useRef<HTMLDivElement>(null);
 
   const n = tapCount(data);
   // `|| default` rather than `?? default`: React Flow reports 0 for a frame
@@ -112,7 +121,7 @@ export default function TubeNode({ id, data, selected, width, height }) {
   }, [id, n, tapKey, angle, w, h, updateInternals]);
 
   const patch = useCallback(
-    (fn) =>
+    (fn: (data: NodeData) => NodeData) =>
       setNodes((nds) =>
         nds.map((nd) => (nd.id === id ? { ...nd, data: fn(nd.data) } : nd)),
       ),
@@ -120,7 +129,7 @@ export default function TubeNode({ id, data, selected, width, height }) {
   );
 
   const setSlots = useCallback(
-    (delta) => patch((d) => stepTaps(d, delta, h)),
+    (delta: number) => patch((d) => stepTaps(d, delta, h)),
     [patch, h],
   );
 
@@ -133,7 +142,7 @@ export default function TubeNode({ id, data, selected, width, height }) {
   // the user is responsible for: subtracting `base` is what makes a rider's
   // rotation an offset from its edge rather than from the screen.
   const startRotate = useCallback(
-    (event) => {
+    (event: ReactPointerEvent<HTMLDivElement>) => {
       event.preventDefault();
       event.stopPropagation();
 
@@ -152,7 +161,7 @@ export default function TubeNode({ id, data, selected, width, height }) {
       const cx = box.x + box.width / 2;
       const cy = box.y + box.height / 2;
 
-      const move = (e) => {
+      const move = (e: PointerEvent) => {
         // +90 because the grip sits at the head, straight up from the centre,
         // and that pose is angle zero.
         const pointed =
@@ -163,7 +172,7 @@ export default function TubeNode({ id, data, selected, width, height }) {
         patch((d) => ({ ...d, rotation: norm(wanted - base) }));
       };
 
-      const up = (e) => {
+      const up = (e: PointerEvent) => {
         grip.releasePointerCapture?.(e.pointerId);
         grip.removeEventListener("pointermove", move);
         grip.removeEventListener("pointerup", up);

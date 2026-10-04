@@ -5,9 +5,23 @@
 // the same rules be reused by the drag commit, by copy/paste, and by anything
 // that later wants to act on "the selection" (align, group, export a slice).
 
+import type {
+  Graph,
+  NodeData,
+  OrdoEdge,
+  OrdoNode,
+  Rect,
+} from "./types.ts";
+
+// A node's absolute (canvas) rect, or null when it has not been measured.
+export type AbsRect = (id: string) => Rect | null;
+
+/** A clipboard payload; see copySelection. */
+export type Clip = Graph & { bounds: Rect };
+
 // --- rectangles -------------------------------------------------------------
 
-export const unionRect = (rects) => {
+export const unionRect = (rects: Rect[]): Rect | null => {
   if (!rects.length) return null;
 
   let minX = Infinity;
@@ -29,8 +43,8 @@ export const unionRect = (rects) => {
 
 // `ids` plus everything nested under them. Copying a group has to copy what is
 // inside it — a container pasted empty is not the thing that was selected.
-export const withDescendants = (nodes, ids) => {
-  const childrenOf = new Map();
+export const withDescendants = (nodes: OrdoNode[], ids: Set<string>) => {
+  const childrenOf = new Map<string, string[]>();
   for (const n of nodes) {
     if (!n.parentId) continue;
     const siblings = childrenOf.get(n.parentId) ?? [];
@@ -38,8 +52,8 @@ export const withDescendants = (nodes, ids) => {
     childrenOf.set(n.parentId, siblings);
   }
 
-  const out = new Set();
-  const visit = (id) => {
+  const out = new Set<string>();
+  const visit = (id: string) => {
     if (out.has(id)) return; // also the cycle guard
     out.add(id);
     (childrenOf.get(id) ?? []).forEach(visit);
@@ -48,15 +62,18 @@ export const withDescendants = (nodes, ids) => {
   return out;
 };
 
-export const selectedIds = (nodes) =>
+export const selectedIds = (nodes: OrdoNode[]) =>
   new Set(nodes.filter((n) => n.selected).map((n) => n.id));
 
 // React Flow requires a parent to appear BEFORE its children in the array.
-export const sortParentsFirst = (nodes) => {
-  const byId = new Map(nodes.map((n) => [n.id, n]));
-  const seen = new Set();
-  const out = [];
-  const visit = (n) => {
+export const sortParentsFirst = (nodes: OrdoNode[]) => {
+  // Keyed to take a missing parentId too: a root's parent is simply not found.
+  const byId = new Map<string | undefined, OrdoNode>(
+    nodes.map((n) => [n.id, n]),
+  );
+  const seen = new Set<string>();
+  const out: OrdoNode[] = [];
+  const visit = (n: OrdoNode | undefined) => {
     if (!n || seen.has(n.id)) return;
     seen.add(n.id); // marked before recursing, so a bad cycle can't hang us
     visit(byId.get(n.parentId));
@@ -70,7 +87,7 @@ export const sortParentsFirst = (nodes) => {
 
 // State React Flow owns and recomputes. Carrying any of it into a paste gives
 // you a node that believes it is mid-drag, or one sized from a stale measure.
-// The undo history leaves the same keys out of every step (see history.js).
+// The undo history leaves the same keys out of every step (see history.ts).
 export const TRANSIENT_NODE_KEYS = [
   "selected",
   "dragging",
@@ -80,14 +97,14 @@ export const TRANSIENT_NODE_KEYS = [
   "resizing",
 ];
 
-export const cleanNode = (node) => {
-  const copy = structuredClone(node);
+export const cleanNode = (node: OrdoNode): OrdoNode => {
+  const copy: OrdoNode & Record<string, unknown> = structuredClone(node);
   for (const key of TRANSIENT_NODE_KEYS) delete copy[key];
   if (copy.data) delete copy.data.isDropTarget; // drop highlight, never content
   return copy;
 };
 
-export const cleanEdge = (edge) => {
+export const cleanEdge = (edge: OrdoEdge): OrdoEdge => {
   const copy = structuredClone(edge);
   delete copy.selected;
   return copy;
@@ -105,11 +122,15 @@ export const cleanEdge = (edge) => {
  * Only edges with BOTH ends in the copy come along: a dangling edge is not a
  * smaller version of the selection, it is a broken one.
  */
-export function copySelection({ nodes, edges, absRect }) {
+export function copySelection({
+  nodes,
+  edges,
+  absRect,
+}: Graph & { absRect: AbsRect }): Clip | null {
   const ids = withDescendants(nodes, selectedIds(nodes));
   if (!ids.size) return null;
 
-  const rootRects = [];
+  const rootRects: Rect[] = [];
 
   const copied = nodes
     .filter((n) => ids.has(n.id))
@@ -150,15 +171,29 @@ export function copySelection({ nodes, edges, absRect }) {
  * parent rather than selected themselves — a pasted diagram is one selected
  * group, not every bar and frame in it showing its own selection chrome.
  */
-export function cloneGraph(clip, { newNodeId, newEdgeId, dx = 0, dy = 0 }) {
+export function cloneGraph(
+  clip: Graph,
+  {
+    newNodeId,
+    newEdgeId,
+    dx = 0,
+    dy = 0,
+  }: {
+    newNodeId: () => string;
+    newEdgeId: (source: string, target: string) => string;
+    dx?: number;
+    dy?: number;
+  },
+): Graph {
   const idMap = new Map(clip.nodes.map((n) => [n.id, newNodeId()]));
   const roots = new Set(clip.nodes.filter((n) => !n.parentId).map((n) => n.id));
 
   // Edges first, so a node that REFERENCES an edge — a tube riding one — can be
   // pointed at the copy instead of the original.
+  // Both ends of every edge travel with it: copySelection takes no other kind.
   const edges = clip.edges.map((e) => {
-    const source = idMap.get(e.source);
-    const target = idMap.get(e.target);
+    const source = idMap.get(e.source)!;
+    const target = idMap.get(e.target)!;
     return {
       ...cleanEdge(e),
       id: newEdgeId(source, target),
@@ -179,7 +214,7 @@ export function cloneGraph(clip, { newNodeId, newEdgeId, dx = 0, dy = 0 }) {
 
     return {
       ...copy,
-      id: idMap.get(n.id),
+      id: idMap.get(n.id)!,
       ...(parentId ? { parentId } : {}),
       position,
       data: reattach(copy.data, edgeMap),
@@ -194,14 +229,14 @@ export function cloneGraph(clip, { newNodeId, newEdgeId, dx = 0, dy = 0 }) {
 // second tube riding the ORIGINAL edge would sit exactly on top of the first,
 // which is never what pasting next to something means — so it is released and
 // lands where the paste put it.
-function reattach(data, edgeMap) {
-  const edgeId = data?.attach?.edgeId;
-  if (!edgeId) return data;
+function reattach(data: NodeData, edgeMap: Map<string, string>): NodeData {
+  const attach = data?.attach;
+  if (!attach?.edgeId) return data;
 
-  const copied = edgeMap.get(edgeId);
+  const copied = edgeMap.get(attach.edgeId);
   if (!copied) {
     const { attach: _released, ...rest } = data;
     return rest;
   }
-  return { ...data, attach: { ...data.attach, edgeId: copied } };
+  return { ...data, attach: { ...attach, edgeId: copied } };
 }

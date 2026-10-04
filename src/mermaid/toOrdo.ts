@@ -1,5 +1,10 @@
-import { SHAPES, DEFAULT_SHAPE } from "../shapes/registry.js";
-import { DEFAULT_EDGE_STYLE, applyEdgeStyle } from "../edgeStyle.js";
+import { SHAPES, DEFAULT_SHAPE } from "../shapes/registry.ts";
+import { DEFAULT_EDGE_STYLE, applyEdgeStyle } from "../edgeStyle.ts";
+import type { LayoutData } from "mermaid";
+import type { MermaidLayout, Subgraph } from "./extractor.ts";
+import type { OrdoEdge, OrdoNode, XY } from "../types.ts";
+
+type LayoutEdge = LayoutData["edges"][number];
 
 // data4Layout -> { nodes, edges } for React Flow.
 //
@@ -22,7 +27,7 @@ import { DEFAULT_EDGE_STYLE, applyEdgeStyle } from "../edgeStyle.js";
 // Mermaid's own alias table: every documented spelling of a shape, mapped to
 // its canonical shortName. Lifted verbatim from the shape registry in
 // mermaid@12, so `@{ shape: database }` and `@{ shape: cyl }` land together.
-const ALIASES = {
+const ALIASES: Record<string, string> = {
   "bow-tie-rectangle": "bow-rect",
   "brace-l": "brace",
   card: "notch-rect",
@@ -120,7 +125,7 @@ const AS_LABEL = "\u0000label";
 // shape registry — the parser emits its own internal names and most of them
 // fall through unchanged. These are the ones that do NOT match a registry
 // shortName or alias, so they need stating explicitly.
-const LEGACY = {
+const LEGACY: Record<string, string> = {
   squareRect: "rect",
   roundedRect: "rounded",
   ellipse: "circle",
@@ -146,7 +151,7 @@ const LEGACY = {
 // then aliases, then the legacy patch table. Anything still unknown becomes a
 // rectangle: an unrecognised shape should render as SOMETHING, which is the
 // same bargain `shapeDef` strikes.
-export function resolveShape(raw) {
+export function resolveShape(raw: string | undefined) {
   if (!raw) return DEFAULT_SHAPE;
   if (LEGACY[raw]) return LEGACY[raw];
   if (SHAPES[raw]) return raw;
@@ -162,19 +167,19 @@ export function resolveShape(raw) {
 // `arrowTypeStart` / `arrowTypeEnd` arrive as arrow_point | arrow_circle |
 // arrow_cross | none. Stripping the prefix leaves exactly the names in the
 // payload's own `markers` array.
-const MARKERS = {
+const MARKERS: Record<string, string> = {
   point: "arrow-filled",
   circle: "circle",
   cross: "cross",
   none: "none",
 };
 
-const marker = (raw) =>
+const marker = (raw: string | undefined) =>
   MARKERS[String(raw ?? "none").replace(/^(double_)?arrow_/, "")] ?? "none";
 
 // `curve` is a d3 interpolator name. Ours is a routing mode; several of theirs
 // collapse onto each of ours.
-const ROUTE_BY_CURVE = {
+const ROUTE_BY_CURVE: Record<string, string> = {
   linear: "straight",
   basis: "curved",
   natural: "curved",
@@ -192,7 +197,7 @@ const ROUTE_BY_CURVE = {
 // the first handle it finds — "n" — at BOTH ends, and every edge leaves the top
 // and arrives at the top. Mermaid never sends port information, so the side has
 // to be derived from the geometry it does send.
-const BY_DIRECTION = {
+const BY_DIRECTION: Record<string, [source: string, target: string]> = {
   TB: ["s", "n"],
   TD: ["s", "n"],
   BT: ["n", "s"],
@@ -203,8 +208,12 @@ const BY_DIRECTION = {
 // Dominant axis between the two centres decides the pair, so a back-edge or a
 // sideways hop anchors sensibly instead of following the diagram direction off
 // the wrong face. Direction is only the fallback for coincident centres.
-function handlesFor(from, to, direction) {
-  const fallback = BY_DIRECTION[direction] ?? BY_DIRECTION.TB;
+function handlesFor(
+  from: XY | undefined,
+  to: XY | undefined,
+  direction: string | undefined,
+): [source: string, target: string] {
+  const fallback = BY_DIRECTION[direction ?? ""] ?? BY_DIRECTION.TB;
   if (!from || !to) return fallback;
 
   const dx = to.x - from.x;
@@ -217,7 +226,7 @@ function handlesFor(from, to, direction) {
 
 // `pattern` and `thickness` both carry the stroke keyword; either can be the
 // one that is set, so read both.
-function strokeOf(edge) {
+function strokeOf(edge: LayoutEdge) {
   const kind = edge?.pattern ?? edge?.thickness ?? "normal";
   const thick = kind === "thick" || edge?.thickness === "thick";
   return {
@@ -233,11 +242,13 @@ function strokeOf(edge) {
 
 // React Flow requires a parent to appear BEFORE its children. Marked before
 // recursing so a malformed parent chain cannot hang the import.
-function sortParentsFirst(nodes) {
-  const byId = new Map(nodes.map((n) => [n.id, n]));
-  const seen = new Set();
-  const out = [];
-  const visit = (n) => {
+function sortParentsFirst(nodes: OrdoNode[]) {
+  const byId = new Map<string | undefined, OrdoNode>(
+    nodes.map((n) => [n.id, n]),
+  );
+  const seen = new Set<string>();
+  const out: OrdoNode[] = [];
+  const visit = (n: OrdoNode | undefined) => {
     if (!n || seen.has(n.id)) return;
     seen.add(n.id);
     visit(byId.get(n.parentId));
@@ -258,9 +269,14 @@ const DEFAULT_H = 48;
  * @returns { nodes, edges, unsupported } — `unsupported` lists shapes Mermaid
  *          named that we drew as a rectangle, so the caller can say so.
  */
-export function toOrdo(payload) {
-  const layout = payload?.mermaid ?? payload ?? {};
-  const subgraphs = payload?.subgraphs ?? [];
+export function toOrdo(payload: MermaidLayout | LayoutData | null | undefined): {
+  nodes: OrdoNode[];
+  edges: OrdoEdge[];
+  unsupported: string[];
+} {
+  // LayoutData is open-ended (any key reads as `any`), so both are pinned here.
+  const layout: Partial<LayoutData> = payload?.mermaid ?? payload ?? {};
+  const subgraphs: Subgraph[] = payload?.subgraphs ?? [];
   const source = Array.isArray(layout.nodes) ? layout.nodes : [];
 
   // Direct membership, kept only so a COLLAPSED subgraph does not lose what
@@ -281,11 +297,13 @@ export function toOrdo(payload) {
 
   // Centres, kept as Mermaid gives them, purely to choose which face of a node
   // each edge should leave from and arrive at.
-  const centre = new Map(source.map((n) => [n.id, { x: n.x ?? 0, y: n.y ?? 0 }]));
+  const centre = new Map<string | undefined, XY>(
+    source.map((n) => [n.id, { x: n.x ?? 0, y: n.y ?? 0 }]),
+  );
 
-  const unsupported = new Set();
+  const unsupported = new Set<string>();
 
-  const nodes = source.map((n) => {
+  const nodes = source.map((n): OrdoNode => {
     const width = n.width ?? DEFAULT_W;
     const height = n.height ?? DEFAULT_H;
 
@@ -307,7 +325,7 @@ export function toOrdo(payload) {
     // Report anything that did not land on a real registry entry, so the
     // caller can say "drawn as a rectangle" rather than quietly lying. A
     // label sentinel is a successful mapping, not a miss.
-    if (!isGroup && n.shape && shape !== AS_LABEL && !SHAPES[shape]) {
+    if (!isGroup && n.shape && shape !== AS_LABEL && !SHAPES[shape!]) {
       unsupported.add(n.shape);
     }
     if (!isGroup && n.shape && shape === DEFAULT_SHAPE && n.shape !== "rect") {
@@ -326,7 +344,7 @@ export function toOrdo(payload) {
       style: { width, height },
       data:
         type === "box"
-          ? { shape, label }
+          ? { shape: shape!, label }
           : collapsed
             ? { label, collapsed: true, members: membersOf.get(n.id) ?? [] }
             : { label },
@@ -334,7 +352,7 @@ export function toOrdo(payload) {
     };
   });
 
-  const edges = (Array.isArray(layout.edges) ? layout.edges : []).map((e) => {
+  const edges = (Array.isArray(layout.edges) ? layout.edges : []).map((e): OrdoEdge => {
     const stroke = strokeOf(e);
     const [sourceHandle, targetHandle] = handlesFor(
       centre.get(e.start),
@@ -344,8 +362,9 @@ export function toOrdo(payload) {
 
     const base = {
       id: e.id,
-      source: e.start,
-      target: e.end,
+      // Mermaid's edges always name both ends; its type leaves them optional.
+      source: e.start!,
+      target: e.end!,
       sourceHandle,
       targetHandle,
       data: { label: e.label ?? "" },
@@ -356,7 +375,7 @@ export function toOrdo(payload) {
 
     return applyEdgeStyle(base, {
       ...DEFAULT_EDGE_STYLE,
-      route: ROUTE_BY_CURVE[e.curve] ?? DEFAULT_EDGE_STYLE.route,
+      route: ROUTE_BY_CURVE[e.curve ?? ""] ?? DEFAULT_EDGE_STYLE.route,
       dash: stroke.dash,
       strokeWidth: stroke.strokeWidth,
       markerStart: marker(e.arrowTypeStart),

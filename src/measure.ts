@@ -47,8 +47,12 @@ const SPREAD = 1.08;
 // `normal`, for the same reason as SPREAD.
 export const LINE_HEIGHT = 1.25;
 
-const advance = (table, ch) => {
-  const code = ch.codePointAt(0);
+export type Font = { size?: number; weight?: number };
+export type TextSize = { width: number; height: number; lines: number };
+export type Measure = (text: string, font?: Font) => TextSize;
+
+const advance = (table: number[], ch: string) => {
+  const code = ch.codePointAt(0) ?? 0;
   const i = code - FIRST;
   if (i >= 0 && i < table.length) return table[i];
   return code >= WIDE_FROM ? WIDE : FALLBACK;
@@ -58,7 +62,10 @@ const advance = (table, ch) => {
  * Size of `text` in px. One line per "\n"; the width is the widest line.
  * Weights of 600 and up read the bold table.
  */
-export function measureText(text, { size = 14, weight = 400 } = {}) {
+export function measureText(
+  text: string,
+  { size = 14, weight = 400 }: Font = {},
+): TextSize {
   const table = weight >= 600 ? BOLD : REGULAR;
   const lines = String(text ?? "").split("\n");
 
@@ -81,11 +88,16 @@ export function measureText(text, { size = 14, weight = 400 } = {}) {
  * breaks are kept; a single word wider than the limit gets a line to itself
  * rather than being cut.
  */
-export function wrapText(text, maxWidth, font, measure = measureText) {
+export function wrapText(
+  text: string,
+  maxWidth: number,
+  font: Font,
+  measure: Measure = measureText,
+) {
   return String(text ?? "")
     .split("\n")
     .map((para) => {
-      const out = [];
+      const out: string[] = [];
       let line = "";
       for (const word of para.split(/\s+/).filter(Boolean)) {
         const next = line ? `${line} ${word}` : word;

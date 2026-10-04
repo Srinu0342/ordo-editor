@@ -18,12 +18,24 @@
 // and the same elements draw in a literal colour. Hollow interiors need an
 // opaque fill so the line does not show through, and that one literal is the
 // reason --mk-hollow exists.
+
+import type { CSSProperties, ReactNode } from "react";
+
+export type MarkerDef = {
+  label: string;
+  group: string;
+  w: number;
+  h: number;
+  refX: number;
+  body: ReactNode;
+};
+
 const SOLID = "var(--mk-solid, context-stroke)";
 const LINE = "var(--mk-line, context-stroke)";
 const HOLLOW = "var(--mk-hollow, #ffffff)";
 
-const S = { style: { fill: SOLID, stroke: "none" } };
-const O = {
+const S: { style: CSSProperties } = { style: { fill: SOLID, stroke: "none" } };
+const O: { style: CSSProperties } = {
   style: {
     fill: "none",
     stroke: LINE,
@@ -32,7 +44,7 @@ const O = {
     strokeLinejoin: "round",
   },
 };
-const H = {
+const H: { style: CSSProperties } = {
   style: {
     fill: HOLLOW,
     stroke: LINE,
@@ -41,7 +53,7 @@ const H = {
   },
 };
 
-export const MARKERS = {
+export const MARKERS: Record<string, MarkerDef> = {
   none: { label: "None", group: "flow", w: 1, h: 1, refX: 0, body: null },
 
   arrow: {
@@ -168,8 +180,8 @@ export const MARKERS = {
 };
 
 export const MARKER_KEYS = Object.keys(MARKERS);
-export const markerId = (key) => `ordo-mk-${key}`;
-export const markerUrl = (key) =>
+export const markerId = (key: string) => `ordo-mk-${key}`;
+export const markerUrl = (key: string | undefined) =>
   key && key !== "none" && MARKERS[key] ? `url(#${markerId(key)})` : undefined;
 
 // Mounted once next to the canvas. `auto-start-reverse` is what lets a single

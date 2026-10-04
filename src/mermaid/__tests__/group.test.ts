@@ -4,14 +4,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { GROUP_Z, diagramName, groupDiagram, groupId } from "../group.js";
-import { cloneGraph, copySelection } from "../../selection.js";
-import { frontMatterTitle } from "../detect.js";
-import { importMermaid } from "../index.js";
-import { ENROLMENT } from "./fixtures.js";
-import { index } from "./helpers.js";
+import { GROUP_Z, diagramName, groupDiagram, groupId } from "../group.ts";
+import { cloneGraph, copySelection } from "../../selection.ts";
+import { frontMatterTitle } from "../detect.ts";
+import { importMermaid } from "../index.ts";
+import { ENROLMENT } from "./fixtures.ts";
+import { index } from "./helpers.ts";
+import type { Rect } from "../../types.ts";
 
-const group = (label) => ({ id: `g-${label}`, type: "container", data: { label } });
+const group = (label: string) => ({ id: `g-${label}`, type: "container", data: { label } });
 
 test("a titled diagram is named for its title", () => {
   assert.equal(diagramName("Checkout flow", []), "Checkout flow");
@@ -77,14 +78,14 @@ test("references follow the ids: edge ends and the lifelines riders ride", () =>
 test("children sit inside the group, in its coordinates, where the import put them", () => {
   const original = index(imported.nodes);
   for (const n of nodes.slice(1)) {
-    const was = original.get(n.id.slice("mermaid-7/".length));
-    const w = n.style.width;
-    const h = n.style.height;
+    const was = original.get(n.id.slice("mermaid-7/".length))!;
+    const w = n.style!.width!;
+    const h = n.style!.height!;
     assert.ok(n.position.x >= 0 && n.position.y >= 0, n.id);
-    assert.ok(n.position.x + w <= g.style.width && n.position.y + h <= g.style.height, n.id);
+    assert.ok(n.position.x + w <= g.style!.width! && n.position.y + h <= g.style!.height!, n.id);
     // the same offsets between nodes as before grouping
-    const head = original.get("seq:head:App");
-    const headNow = byId.get("mermaid-7/seq:head:App");
+    const head = original.get("seq:head:App")!;
+    const headNow = byId.get("mermaid-7/seq:head:App")!;
     assert.ok(Math.abs(n.position.x - headNow.position.x - (was.position.x - head.position.x)) < 1e-9);
     assert.ok(Math.abs(n.position.y - headNow.position.y - (was.position.y - head.position.y)) < 1e-9);
   }
@@ -94,21 +95,21 @@ test("riders stay exactly on their lifelines inside the group", () => {
   // Header, foot and rider all share the group's coordinates now.
   for (const n of nodes) {
     if (n.type !== "tube") continue;
-    const actor = n.data.attach.edgeId.slice("mermaid-7/seq:life:".length);
-    const head = byId.get(`mermaid-7/seq:head:${actor}`);
-    const foot = byId.get(`mermaid-7/seq:foot:${actor}`);
-    const from = head.position.y + head.style.height + 3;
+    const actor = n.data.attach!.edgeId.slice("mermaid-7/seq:life:".length);
+    const head = byId.get(`mermaid-7/seq:head:${actor}`)!;
+    const foot = byId.get(`mermaid-7/seq:foot:${actor}`)!;
+    const from = head.position.y + head.style!.height! + 3;
     const to = foot.position.y - 3;
-    const centre = from + n.data.attach.t * (to - from);
-    assert.ok(Math.abs(centre - (n.position.y + n.style.height / 2)) < 0.05, n.id);
+    const centre = from + n.data.attach!.t * (to - from);
+    assert.ok(Math.abs(centre - (n.position.y + n.style!.height! / 2)) < 0.05, n.id);
   }
 });
 
 test("a copied diagram pastes as one selected group, its bars riding the copied lifelines", () => {
   const canvas = nodes.map((n) => (n.id === g.id ? { ...n, selected: true } : n));
-  const absRect = (id) =>
-    id === g.id ? { ...g.position, width: g.style.width, height: g.style.height } : null;
-  const clip = copySelection({ nodes: canvas, edges, absRect });
+  const absRect = (id: string): Rect | null =>
+    id === g.id ? { ...g.position, width: g.style!.width!, height: g.style!.height! } : null;
+  const clip = copySelection({ nodes: canvas, edges, absRect })!;
   assert.equal(clip.nodes.length, nodes.length); // the tubes come along: they are in the group
   assert.equal(clip.edges.length, edges.length);
 
@@ -135,7 +136,7 @@ test("a copied diagram pastes as one selected group, its bars riding the copied 
 test("selecting the group never re-stacks what is inside it", () => {
   // React Flow's rule: a child keeps its own zIndex unless its parent sits at
   // or above it; selecting the parent lifts the parent by 1000.
-  const childZ = (parentZ, own = 0) => (parentZ >= own ? parentZ + 1 : own);
+  const childZ = (parentZ: number, own = 0) => (parentZ >= own ? parentZ + 1 : own);
   for (const n of nodes.slice(1)) {
     const own = n.zIndex ?? 0;
     assert.equal(childZ(GROUP_Z, own), own, n.id);

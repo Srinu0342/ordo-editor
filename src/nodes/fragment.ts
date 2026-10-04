@@ -1,5 +1,7 @@
-import { label, line, path, rect } from "../ops.js";
-import { measureText } from "../measure.js";
+import { label, line, path, rect } from "../ops.ts";
+import type { LabelOptions, Op } from "../ops.ts";
+import { measureText } from "../measure.ts";
+import type { NodeData } from "../types.ts";
 
 // A combined fragment: the loop / alt / opt / par frame of a sequence diagram.
 //
@@ -30,23 +32,26 @@ export const OPERATOR_FONT = { size: 12, weight: 700 };
 export const GUARD_FONT = { size: 12, weight: 400 };
 export const TITLE_FONT = { size: 13, weight: 600 };
 
-const n = (v) => Math.round(v * 100) / 100;
+const n = (v: number) => Math.round(v * 100) / 100;
 
 // Frames drawn as a bare rectangle, with no operator tab.
-export const isPlain = (operator) => operator === "rect" || operator === "box";
+export const isPlain = (operator: string) => operator === "rect" || operator === "box";
 
 // Guards read the UML way, bracketed.
-export const bracket = (guard) => (guard ? `[${guard}]` : "");
+export const bracket = (guard: string) => (guard ? `[${guard}]` : "");
 
 // Measured with the shared table, so the importer and the canvas agree on how
 // wide a tab is.
-export const tabWidth = (operator) =>
+export const tabWidth = (operator: string | undefined) =>
   Math.ceil(measureText(operator || " ", OPERATOR_FONT).width) +
   2 * TAB_PAD +
   NOTCH;
 
 /** The narrowest frame that still shows its header in full. */
-export function headerWidth({ operator, guards = [] } = {}) {
+export function headerWidth({
+  operator,
+  guards = [],
+}: Pick<NodeData, "operator" | "guards"> = {}) {
   if (operator === "rect") return 0;
   const first = guards[0] ?? "";
   if (operator === "box")
@@ -59,11 +64,11 @@ export function headerWidth({ operator, guards = [] } = {}) {
 
 // Divider i's guard is guards[i + 1]. Slot names carry the index, so an edit
 // made in a label can be written back to the right guard.
-export const guardSlot = (i) => `guard:${i}`;
-export const guardIndex = (slot) => Number(String(slot).slice(6));
+export const guardSlot = (i: number) => `guard:${i}`;
+export const guardIndex = (slot: string) => Number(String(slot).slice(6));
 
 /** The frame's op-list. `data.dividers` are px from the frame's top. */
-export function drawFragment(w, h, data = {}) {
+export function drawFragment(w: number, h: number, data: NodeData = {}) {
   const operator = data.operator ?? "";
 
   if (operator === "rect")
@@ -83,9 +88,13 @@ export function drawFragment(w, h, data = {}) {
     ];
 
   const tw = n(Math.min(tabWidth(operator), w - 1.5));
-  const guard = { ...GUARD_FONT, align: "left", fill: "node.ink.muted" };
+  const guard: LabelOptions = {
+    ...GUARD_FONT,
+    align: "left",
+    fill: "node.ink.muted",
+  };
 
-  const ops = [
+  const ops: Op[] = [
     rect(0.75, 0.75, n(w - 1.5), n(h - 1.5), { fill: "none", width: 1.25 }),
     path(
       `M0.75 0.75 H${tw} V${TAB_H - NOTCH} L${n(tw - NOTCH)} ${TAB_H} H0.75 Z`,
@@ -122,7 +131,11 @@ export function drawFragment(w, h, data = {}) {
  * operand; removing takes the last divider and its guard. Guards always number
  * one more than dividers.
  */
-export function stepOperands(data, delta, h) {
+export function stepOperands(
+  data: NodeData,
+  delta: number,
+  h: number,
+): NodeData {
   const dividers = [...(data.dividers ?? [])];
 
   if (delta > 0) {

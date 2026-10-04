@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { DragEvent, PointerEvent } from "react";
 import {
+  BackgroundVariant,
+  ConnectionMode,
+  SelectionMode,
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
@@ -11,13 +15,24 @@ import {
   useNodesInitialized,
   addEdge,
 } from "@xyflow/react";
+import type {
+  NodeChange,
+  NodePositionChange,
+  OnConnect,
+  OnNodeDrag,
+  OnNodesChange,
+  XYPosition,
+} from "@xyflow/react";
 import { ToastContainer } from "react-toastify";
 
-import Sidebar from "./components/Sidebar.jsx";
-import Toolbar from "./components/Toolbar.jsx";
-import ImportDialog from "./components/ImportDialog.jsx";
-import AlignmentGuides from "./components/AlignmentGuides.jsx";
-import { alignRect, GUIDE_SNAP_PX } from "./alignment.js";
+import Sidebar from "./components/Sidebar.tsx";
+import Toolbar from "./components/Toolbar.tsx";
+import ImportDialog from "./components/ImportDialog.tsx";
+import type { ImportDescription } from "./components/ImportDialog.tsx";
+import AlignmentGuides from "./components/AlignmentGuides.tsx";
+import type { Panel } from "./components/Sidebar.tsx";
+import { alignRect, GUIDE_SNAP_PX } from "./alignment.ts";
+import type { Guide } from "./alignment.ts";
 import {
   nodeTypes,
   GROUP_TYPES,
@@ -27,7 +42,7 @@ import {
   isUnparented,
   TubeFollower,
   TUBE_TYPE,
-} from "./nodes/index.js";
+} from "./nodes/index.ts";
 import {
   nearestEdge,
   nearestOnPath,
@@ -35,9 +50,10 @@ import {
   edgesTouching,
   SNAP_DIST,
   DETACH_DIST,
-} from "./edges/attach.js";
-import { edgeTypes, EdgeMarkers } from "./edges/index.js";
-import { DEFAULT_EDGE_STYLE, applyEdgeStyle, newEdge } from "./edgeStyle.js";
+} from "./edges/attach.ts";
+import { edgeTypes, EdgeMarkers } from "./edges/index.ts";
+import { DEFAULT_EDGE_STYLE, applyEdgeStyle, newEdge } from "./edgeStyle.ts";
+import type { EdgeStyle } from "./edgeStyle.ts";
 import {
   IMPORTABLE,
   detectDiagram,
@@ -45,7 +61,7 @@ import {
   groupDiagram,
   groupId,
   importMermaid,
-} from "./mermaid";
+} from "./mermaid/index.ts";
 import {
   copySelection,
   cloneGraph,
@@ -53,13 +69,15 @@ import {
   selectedIds,
   withDescendants,
   sortParentsFirst,
-} from "./selection.js";
-import { useHistory, isTyping } from "./useHistory.js";
+} from "./selection.ts";
+import type { Clip } from "./selection.ts";
+import { useHistory, isTyping } from "./useHistory.ts";
+import type { Attach, OrdoEdge, OrdoNode, Rect, XY } from "./types.ts";
 
 let seq = 0;
 // `taken` is the live id set: Mermaid import brings in ids we did not mint
 // ("A", "n0"…), so the counter alone is not a uniqueness guarantee.
-const nextId = (taken) => {
+const nextId = (taken?: Set<string>) => {
   let id;
   do {
     id = `n${seq++}`;
@@ -74,7 +92,7 @@ const GRID = 10;
 // Mermaid knows and Ordo cannot import yet also carries a warning, which the
 // dialog raises as a toast. Text that is not Mermaid at all has no type to
 // warn about; its label says so.
-const describeMermaid = (text) => {
+const describeMermaid = (text: string): ImportDescription => {
   const found = detectDiagram(text);
   return {
     ok: Boolean(found.family),
@@ -96,19 +114,19 @@ const PASTE_NUDGE = 2 * GRID;
 // Between an imported diagram and whatever is already on the canvas.
 const IMPORT_GAP = 8 * GRID;
 
-const snap = (v) => Math.round(v / GRID) * GRID;
+const snap = (v: number) => Math.round(v / GRID) * GRID;
 
 // --- group membership -------------------------------------------------------
 
 // `inner` has to sit ENTIRELY inside `outer`. Swap this for a centre-point test
 // if you would rather have partial overlap count as "inside".
-const contains = (outer, inner) =>
+const contains = (outer: Rect, inner: Rect) =>
   inner.x >= outer.x &&
   inner.y >= outer.y &&
   inner.x + inner.width <= outer.x + outer.width &&
   inner.y + inner.height <= outer.y + outer.height;
 
-const depthOf = (byId, id) => {
+const depthOf = (byId: Map<string, OrdoNode>, id: string) => {
   let depth = 0;
   let cur = byId.get(id);
   while (cur?.parentId) {
@@ -119,7 +137,11 @@ const depthOf = (byId, id) => {
 };
 
 // Keeps a group from being dropped into one of its own descendants.
-const isDescendantOfAny = (byId, id, ancestorIds) => {
+const isDescendantOfAny = (
+  byId: Map<string, OrdoNode>,
+  id: string,
+  ancestorIds: Set<string>,
+) => {
   let cur = byId.get(id);
   while (cur?.parentId) {
     if (ancestorIds.has(cur.parentId)) return true;
@@ -128,19 +150,19 @@ const isDescendantOfAny = (byId, id, ancestorIds) => {
   return false;
 };
 
-const initialNodes = [];
-const initialEdges = [];
+const initialNodes: OrdoNode[] = [];
+const initialEdges: OrdoEdge[] = [];
 
 function Flow() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
-  const [panel, setPanel] = useState("nodes");
+  const [panel, setPanel] = useState<Panel>("nodes");
   const [edgeStyle, setEdgeStyle] = useState(DEFAULT_EDGE_STYLE);
   const [importOpen, setImportOpen] = useState(false);
-  const [guides, setGuides] = useState([]);
+  const [guides, setGuides] = useState<Guide[]>([]);
 
   const { screenToFlowPosition, toObject, getInternalNode, fitView, getZoom } =
-    useReactFlow();
+    useReactFlow<OrdoNode, OrdoEdge>();
 
   // Window-level shortcuts read the graph through refs: binding the listener to
   // `nodes` would re-subscribe on every drag frame for no gain.
@@ -155,10 +177,10 @@ function Flow() {
   // Last pointer position over the canvas, in flow coordinates. Null whenever
   // the pointer is outside, which is what makes "paste where I'm pointing"
   // degrade cleanly into "paste slightly offset".
-  const pointerRef = useRef(null);
-  const clipboardRef = useRef(null);
+  const pointerRef = useRef<XYPosition | null>(null);
+  const clipboardRef = useRef<Clip | null>(null);
 
-  const onConnect = useCallback(
+  const onConnect = useCallback<OnConnect>(
     (c) => setEdges((eds) => addEdge(newEdge(c, edgeStyle), eds)),
     [setEdges, edgeStyle],
   );
@@ -166,7 +188,7 @@ function Flow() {
   // Toolbar edits retarget: they hit the current edge selection if there is
   // one, and otherwise just move the default for the next edge drawn.
   const changeEdgeStyle = useCallback(
-    (patch) => {
+    (patch: Partial<EdgeStyle>) => {
       const next = { ...edgeStyle, ...patch };
       setEdgeStyle(next);
 
@@ -180,7 +202,7 @@ function Flow() {
 
   // absolute (canvas) rect of a node, using its measured size
   const absRect = useCallback(
-    (id) => {
+    (id: string): Rect | null => {
       const internal = getInternalNode(id);
       if (!internal) return null;
       const { x, y } = internal.internals.positionAbsolute;
@@ -199,10 +221,11 @@ function Flow() {
   // is not travelling with it, and the same nudge is added to each dragged
   // position so the selection keeps its shape. Grid snap has already run by
   // now, so an alignment wins over the grid — that is the point of asking.
-  const onNodesChangeAligned = useCallback(
+  const onNodesChangeAligned = useCallback<OnNodesChange<OrdoNode>>(
     (changes) => {
       const drags = changes.filter(
-        (c) => c.type === "position" && c.dragging && c.position,
+        (c): c is NodePositionChange & { position: XYPosition } =>
+          c.type === "position" && Boolean(c.dragging && c.position),
       );
       if (!drags.length) {
         onNodesChange(changes);
@@ -212,8 +235,8 @@ function Flow() {
       // Where each dragged node WOULD land, in absolute coordinates. Its
       // parent is not moving (React Flow drops children of a moving parent),
       // so last frame's parent offset still holds.
-      const offsets = new Map();
-      const landing = [];
+      const offsets = new Map<string, XY>();
+      const landing: Rect[] = [];
       for (const c of drags) {
         const internal = getInternalNode(c.id);
         if (!internal) continue;
@@ -235,7 +258,7 @@ function Flow() {
         graphRef.current.nodes,
         new Set(drags.map((c) => c.id)),
       );
-      const others = [];
+      const others: Rect[] = [];
       for (const n of graphRef.current.nodes) {
         if (moving.has(n.id) || n.hidden) continue;
         const r = absRect(n.id);
@@ -250,8 +273,8 @@ function Flow() {
       setGuides(next);
       onNodesChange(
         dx || dy
-          ? changes.map((c) =>
-              offsets.has(c.id) && c.type === "position" && c.dragging
+          ? changes.map((c): NodeChange<OrdoNode> =>
+              c.type === "position" && offsets.has(c.id) && c.dragging && c.position
                 ? {
                     ...c,
                     position: { x: c.position.x + dx, y: c.position.y + dy },
@@ -269,11 +292,15 @@ function Flow() {
   // own ancestor, and a group being dragged can never adopt its travelling
   // companions mid-flight.
   const groupAt = useCallback(
-    (rect, allNodes, skipIds = new Set()) => {
+    (
+      rect: Rect | null,
+      allNodes: OrdoNode[],
+      skipIds = new Set<string>(),
+    ): OrdoNode | null => {
       if (!rect) return null;
 
       const byId = new Map(allNodes.map((n) => [n.id, n]));
-      let best = null;
+      let best: OrdoNode | null = null;
       let bestDepth = -1;
 
       for (const n of allNodes) {
@@ -305,7 +332,7 @@ function Flow() {
   // A single-node drag is trivially coherent, so this reduces to the old
   // one-node behaviour without a special case.
   const dropTargets = useCallback(
-    (draggedNodes, allNodes) => {
+    (draggedNodes: OrdoNode[], allNodes: OrdoNode[]) => {
       const byId = new Map(allNodes.map((n) => [n.id, n]));
       // Everything moving is skipped when hit-testing, including the riders
       // that are about to be excluded from adoption — a group must not adopt
@@ -313,7 +340,7 @@ function Flow() {
       const skipIds = new Set(draggedNodes.map((n) => n.id));
       const adoptable = draggedNodes.filter((n) => !isUnparented(n));
 
-      const rects = new Map();
+      const rects = new Map<string, Rect>();
       for (const n of adoptable) {
         const rect = absRect(n.id);
         if (rect) rects.set(n.id, rect);
@@ -324,7 +351,7 @@ function Flow() {
       );
       const coherent = parents.size === 1 && rects.size === adoptable.length;
 
-      const targets = new Map();
+      const targets = new Map<string, OrdoNode | null>();
       if (coherent) {
         const shared = groupAt(
           unionRect([...rects.values()]),
@@ -345,7 +372,7 @@ function Flow() {
   // flags the live drop targets. The flag is transient, so it's deleted rather
   // than set to false — nothing leaks into `toObject()` once the drag is over.
   const markDropTargets = useCallback(
-    (targetIds) => {
+    (targetIds: Set<string>) => {
       setNodes((nds) => {
         let changed = false;
 
@@ -371,7 +398,7 @@ function Flow() {
   );
 
   const centreOf = useCallback(
-    (id) => {
+    (id: string) => {
       const r = absRect(id);
       return r ? { x: r.x + r.width / 2, y: r.y + r.height / 2 } : null;
     },
@@ -381,7 +408,7 @@ function Flow() {
   // Writes `attach` onto some nodes and strips it from others in one pass, so a
   // tube that hops from one edge to another never exists in both states.
   const setAttachments = useCallback(
-    (attachments, released) => {
+    (attachments: Map<string, Attach>, released: Set<string>) => {
       if (!attachments.size && !released.size) return;
 
       setNodes((nds) => {
@@ -416,8 +443,8 @@ function Flow() {
   // DETACH_DIST is larger than the snap radius on purpose: an attached tube
   // nudged by a pixel must not flicker between held and free.
   const releasePulledAway = useCallback(
-    (draggedNodes) => {
-      const released = new Set();
+    (draggedNodes: OrdoNode[]) => {
+      const released = new Set<string>();
 
       for (const node of draggedNodes) {
         const attach = node.data?.attach;
@@ -436,10 +463,10 @@ function Flow() {
   );
 
   // live feedback: highlight the group(s) the selection would land in
-  const onNodeDrag = useCallback(
+  const onNodeDrag = useCallback<OnNodeDrag<OrdoNode>>(
     (_event, _node, draggedNodes) => {
       const byId = new Map(nodes.map((n) => [n.id, n]));
-      const live = new Set();
+      const live = new Set<string>();
 
       for (const [id, target] of dropTargets(draggedNodes, nodes)) {
         if (target && target.id !== (byId.get(id)?.parentId ?? undefined)) {
@@ -459,7 +486,7 @@ function Flow() {
   // tube, so a tube attached to its own edge would chase a point that is
   // chasing it back and the pair would never come to rest.
   const settleRiders = useCallback(
-    (draggedNodes) => {
+    (draggedNodes: OrdoNode[]) => {
       const riders = draggedNodes.filter((n) => n.type === TUBE_TYPE);
       if (!riders.length) return;
 
@@ -467,8 +494,8 @@ function Flow() {
       const moving = new Set(draggedNodes.map((n) => n.id));
       const ownEdges = edgesTouching(eds, moving);
 
-      const attachments = new Map();
-      const released = new Set();
+      const attachments = new Map<string, Attach>();
+      const released = new Set<string>();
 
       for (const rider of riders) {
         const centre = centreOf(rider.id);
@@ -504,7 +531,7 @@ function Flow() {
   // of its members or by the rubber-band overlay — React Flow reports both
   // through here, and already drops children whose parent is moving too, so
   // nothing double-counts them.
-  const onNodeDragStop = useCallback(
+  const onNodeDragStop = useCallback<OnNodeDrag<OrdoNode>>(
     (_event, _node, draggedNodes) => {
       // queued first, so the flag is gone before we re-parent
       markDropTargets(new Set());
@@ -525,7 +552,8 @@ function Flow() {
           if ((n.parentId ?? undefined) === parentId) return n; // no change
 
           changed = true;
-          const origin = parent ? absRect(parent.id) : { x: 0, y: 0 };
+          // groupAt only ever picks a group it could measure
+          const origin = parent ? absRect(parent.id)! : { x: 0, y: 0 };
           const { parentId: _released, ...rest } = n;
           return {
             ...rest,
@@ -556,7 +584,7 @@ function Flow() {
   // roots; children ride along inside their parents, so a group's internals are
   // never re-laid-out by a paste.
   const paste = useCallback(
-    (clip, { dx, dy }) => {
+    (clip: Clip, { dx, dy }: { dx: number; dy: number }) => {
       if (!clip?.nodes.length) return;
 
       const taken = new Set(graphRef.current.nodes.map((n) => n.id));
@@ -566,7 +594,8 @@ function Flow() {
         return id;
       };
       let edgeSeq = 0;
-      const newEdgeId = (source, target) => `e${edgeSeq++}-${source}-${target}`;
+      const newEdgeId = (source: string, target: string) =>
+        `e${edgeSeq++}-${source}-${target}`;
 
       const fresh = cloneGraph(clip, { newNodeId, newEdgeId, dx, dy });
 
@@ -650,7 +679,7 @@ function Flow() {
   // Ctrl/Cmd chords. React Flow's own deleteKeyCode still handles Delete; these
   // are the ones it has no opinion about.
   useEffect(() => {
-    const onKeyDown = (event) => {
+    const onKeyDown = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
       if (isTyping(event.target)) return; // a label being edited owns its keys
 
@@ -719,7 +748,7 @@ function Flow() {
   // nodes measured by then — and a tube re-measuring its own handles gets in
   // first, so an early fit frames one lifeline and leaves the rest off-screen.
   const nodesInitialized = useNodesInitialized();
-  const fitPending = useRef(null);
+  const fitPending = useRef<string | null>(null);
   useEffect(() => {
     const id = fitPending.current;
     if (!id || !nodesInitialized) return;
@@ -753,7 +782,7 @@ function Flow() {
   // next mermaidN, so it can be selected and moved as a unit. It arrives
   // selected. A failure is thrown back to the dialog, which keeps it on screen.
   const onMermaidText = useCallback(
-    async (source, { fileName }) => {
+    async (source: string, { fileName }: { fileName: string }) => {
       const result = await importMermaid(source);
 
       if (result.warnings.length) {
@@ -785,13 +814,13 @@ function Flow() {
     [setNodes, setEdges, besideContent],
   );
 
-  const onDragOver = useCallback((event) => {
+  const onDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
     event.preventDefault(); // required, or the drop never fires
     event.dataTransfer.dropEffect = "move";
   }, []);
 
   const onDrop = useCallback(
-    (event) => {
+    (event: DragEvent<HTMLDivElement>) => {
       event.preventDefault();
       const kind = event.dataTransfer.getData("application/ordo");
       if (!kind) return;
@@ -860,7 +889,7 @@ function Flow() {
   );
 
   const trackPointer = useCallback(
-    (event) => {
+    (event: PointerEvent<HTMLDivElement>) => {
       pointerRef.current = screenToFlowPosition({
         x: event.clientX,
         y: event.clientY,
@@ -926,7 +955,7 @@ function Flow() {
             onConnect={onConnect}
             onNodeDrag={onNodeDrag}
             onNodeDragStop={onNodeDragStop}
-            connectionMode="loose"
+            connectionMode={ConnectionMode.Loose}
             // A sequence diagram is tall out of all proportion to a flowchart.
             // React Flow's default floor of 0.5 stops fitView ever fitting one,
             // so the canvas would open on a corner of it.
@@ -939,13 +968,13 @@ function Flow() {
             // expect from a lasso and stops big groups being unselectable.
             selectionKeyCode="Shift"
             multiSelectionKeyCode={["Meta", "Control"]}
-            selectionMode="partial"
+            selectionMode={SelectionMode.Partial}
           >
             {/* keeps every rider on the edge it was dropped on */}
             <TubeFollower />
             <AlignmentGuides guides={guides} />
 
-            <Background variant="lines" gap={GRID} size={1} />
+            <Background variant={BackgroundVariant.Lines} gap={GRID} size={1} />
             <MiniMap />
             <Controls />
           </ReactFlow>

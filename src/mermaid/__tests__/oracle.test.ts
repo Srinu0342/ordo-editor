@@ -5,29 +5,47 @@
 //
 // It touches internals no production code may: `renderer.bounds` and its
 // `endActivation`. Breakage here blocks CI, never an import.
-import { dom, shimTextGeometry } from "./dom.js";
+import { dom, shimTextGeometry } from "./dom.ts";
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { ENROLMENT, LOUNGE } from "./fixtures.js";
+import { ENROLMENT, LOUNGE } from "./fixtures.ts";
+import type { Fragment } from "../sequence.ts";
 
 shimTextGeometry();
 
-const { default: mermaid } = await import("../mermaid.js");
-const { readSequence } = await import("../sequence.js");
+// The sequence renderer's layout state, as far as the oracle reads it. Mermaid
+// does not type it: it is internals, and only this file may touch them.
+type Loop = { title?: string; starty: number; stopy: number };
+type Bounds = {
+  endActivation: (msg: unknown) => { actor: string; startx: number };
+  models: {
+    actors: { name: string; x: number; width: number }[];
+    messages: { from: string; to: string }[];
+    loops: Loop[];
+  };
+};
 
-async function oracle(src) {
+// A frame and the frames inside it, by guard title.
+type Tree = { title: string; children: Tree[] };
+
+const { default: mermaid } = await import("../mermaid.ts");
+const { readSequence } = await import("../sequence.ts");
+
+async function oracle(src: string) {
   const diagram = await mermaid.mermaidAPI.getDiagramFromText(src);
   const ours = readSequence(diagram);
 
   // Activations are spliced out of `bounds` as they close, so they are
   // captured on the way out. `bounds` is one module-level object shared by
   // every render, so the hook comes off again afterwards.
-  const bounds = diagram.renderer.bounds;
-  const captured = [];
+  const { bounds } = diagram.renderer as typeof diagram.renderer & {
+    bounds: Bounds;
+  };
+  const captured: { actor: string; startx: number }[] = [];
   const endActivation = bounds.endActivation;
-  bounds.endActivation = function (msg) {
+  bounds.endActivation = function (this: Bounds, msg: unknown) {
     const r = endActivation.call(this, msg);
     captured.push({ actor: r.actor, startx: r.startx });
     return r;
@@ -48,18 +66,19 @@ async function oracle(src) {
     ours,
     theirs: { actors: [...actors], messages: [...messages], loops: [...loops] },
     captured,
-    conf: diagram.db.getConfig(),
+    // the sequence diagram's own config, which is where activationWidth lives
+    conf: diagram.db.getConfig!() as { activationWidth?: number },
   };
 }
 
 // Frames as a nesting of guard titles, from Mermaid's loop boxes by interval
 // containment, and from the importer's tree directly.
-const norm = (t) => String(t ?? "").replace(/^\[|\]$/g, "").replace(/\s+/g, " ").trim();
+const norm = (t: unknown) => String(t ?? "").replace(/^\[|\]$/g, "").replace(/\s+/g, " ").trim();
 
-function theirNesting(loops) {
+function theirNesting(loops: Loop[]) {
   const sorted = [...loops].sort((p, q) => p.starty - q.starty || q.stopy - p.stopy);
-  const roots = [];
-  const stack = [];
+  const roots: Tree[] = [];
+  const stack: { loop: Loop; node: Tree }[] = [];
   for (const loop of sorted) {
     const node = { title: norm(loop.title), children: [] };
     while (stack.length && stack[stack.length - 1].loop.stopy < loop.stopy) stack.pop();
@@ -69,10 +88,10 @@ function theirNesting(loops) {
   return roots;
 }
 
-const ourNesting = (frames) =>
+const ourNesting = (frames: Fragment[]): Tree[] =>
   frames.map((f) => ({ title: norm(f.guards[0]), children: ourNesting(f.children) }));
 
-const sortTree = (nodes) =>
+const sortTree = (nodes: Tree[]): Tree[] =>
   nodes
     .map((n) => ({ ...n, children: sortTree(n.children) }))
     .sort((p, q) => p.title.localeCompare(q.title));
@@ -102,7 +121,7 @@ for (const [name, src] of [
     // Mermaid offsets a nested bar by half its width per level; undo that.
     const half = (conf.activationWidth ?? 10) / 2;
     const centre = new Map(theirs.actors.map((a) => [a.name, a.x + a.width / 2]));
-    const depths = (list) =>
+    const depths = (list: { actor: string; depth: number }[]) =>
       Object.fromEntries(
         [...new Set(list.map((s) => s.actor))]
           .sort()
@@ -114,7 +133,7 @@ for (const [name, src] of [
     const theirsByActor = depths(
       captured.map((c) => ({
         actor: c.actor,
-        depth: Math.round((c.startx - centre.get(c.actor)) / half) + 2,
+        depth: Math.round((c.startx - centre.get(c.actor)!) / half) + 2,
       })),
     );
     assert.deepEqual(depths(ours.spans), theirsByActor);

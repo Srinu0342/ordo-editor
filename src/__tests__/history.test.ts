@@ -8,9 +8,11 @@ import {
   applyStep,
   createUndoStack,
   diffGraph,
-} from "../history.js";
+} from "../history.ts";
+import type { Step } from "../history.ts";
+import type { Attach, Graph, OrdoEdge, OrdoNode } from "../types.ts";
 
-const box = (id, extra = {}) => ({
+const box = (id: string, extra: Partial<OrdoNode> = {}): OrdoNode => ({
   id,
   type: "box",
   position: { x: 0, y: 0 },
@@ -19,7 +21,12 @@ const box = (id, extra = {}) => ({
   ...extra,
 });
 
-const wire = (id, source, target, extra = {}) => ({
+const wire = (
+  id: string,
+  source: string,
+  target: string,
+  extra: Partial<OrdoEdge> = {},
+): OrdoEdge => ({
   id,
   source,
   target,
@@ -29,7 +36,11 @@ const wire = (id, source, target, extra = {}) => ({
   ...extra,
 });
 
-const rider = (id, attach, extra = {}) => ({
+const rider = (
+  id: string,
+  attach: Attach | null,
+  extra: Partial<OrdoNode> = {},
+): OrdoNode => ({
   id,
   type: "tube",
   position: { x: 40, y: 80 },
@@ -38,13 +49,19 @@ const rider = (id, attach, extra = {}) => ({
   ...extra,
 });
 
-const graph = (nodes, edges = []) => ({ nodes, edges });
+const graph = (nodes: OrdoNode[], edges: OrdoEdge[] = []): Graph => ({
+  nodes,
+  edges,
+});
 
-const patch = (item, fields) => ({ ...item, ...fields });
-const relabel = (item, label) => ({ ...item, data: { ...item.data, label } });
+const patch = <T>(item: T, fields: Partial<T>): T => ({ ...item, ...fields });
+const relabel = (item: OrdoNode, label: string): OrdoNode => ({
+  ...item,
+  data: { ...item.data, label },
+});
 
 // Undo from `b` lands on `a`, redo from `a` lands on `b`.
-function roundTrip(a, b) {
+function roundTrip(a: Graph, b: Graph): Step {
   const step = diffGraph(a, b);
   assert.ok(step, "a real change makes a step");
   assert.deepEqual(applyStep(b, step, "undo"), a);
@@ -149,7 +166,7 @@ test("re-parenting is undone along with the reshuffle that put the parent first"
     box("z"),
   ]);
   const step = roundTrip(before, after);
-  assert.deepEqual(step.nodes.order, { at: 1, before: ["c", "g"], after: ["g", "c"] });
+  assert.deepEqual(step.nodes?.order, { at: 1, before: ["c", "g"], after: ["g", "c"] });
 });
 
 test("an undo leaves the selection and measured sizes as they are live", () => {
@@ -160,7 +177,7 @@ test("an undo leaves the selection and measured sizes as they are live", () => {
     { ...relabel(a, "Hi"), selected: true, measured: { width: 120, height: 60 } },
     { ...box("b"), selected: true },
   ]);
-  const [undoneA, untouchedB] = applyStep(live, step, "undo").nodes;
+  const [undoneA, untouchedB] = applyStep(live, step!, "undo").nodes;
   assert.equal(undoneA.data.label, "");
   assert.equal(undoneA.selected, true);
   assert.deepEqual(undoneA.measured, { width: 120, height: 60 });
@@ -172,7 +189,7 @@ test("an item a step brings back carries none of the canvas's state", () => {
   const live = { ...a, selected: true, measured: { width: 1, height: 1 } };
   const step = diffGraph(graph([live]), graph([]));
 
-  const [back] = applyStep(graph([]), step, "undo").nodes;
+  const [back] = applyStep(graph([]), step!, "undo").nodes;
   assert.deepEqual(back, a);
 });
 
@@ -186,7 +203,7 @@ test("a rider's position and tangent belong to the follower, not to a step", () 
 
   // slid along its edge: the step keeps `t`, and leaves where it sits to the follower
   const slid = rider("r", { ...on, t: 0.6, angle: 91 }, { position: { x: 44, y: 150 } });
-  assert.deepEqual(diffGraph(graph([riding]), graph([slid])).nodes.changes, [
+  assert.deepEqual(diffGraph(graph([riding]), graph([slid]))?.nodes?.changes, [
     ["r", ["data", "attach", "t"], 0.25, 0.6],
   ]);
 });
@@ -199,18 +216,18 @@ test("a rider that lets go of its edge goes back on it, and lands where it was d
 });
 
 test(`the stack reaches back ${HISTORY_LIMIT} steps and no further`, () => {
-  const stack = createUndoStack();
+  const stack = createUndoStack<{ i: number }>();
   const steps = Array.from({ length: HISTORY_LIMIT + 5 }, (_, i) => ({ i }));
   steps.forEach((s) => stack.push(s));
 
-  const undone = [];
+  const undone: number[] = [];
   for (let s = stack.undo(); s; s = stack.undo()) undone.push(s.i);
   assert.equal(undone.length, HISTORY_LIMIT);
   assert.deepEqual(undone, steps.slice(5).map((s) => s.i).reverse());
 });
 
 test("redo walks forward again until a new change overrides it", () => {
-  const stack = createUndoStack();
+  const stack = createUndoStack<{ n: number }>();
   const [one, two, three] = [{ n: 1 }, { n: 2 }, { n: 3 }];
   stack.push(one);
   stack.push(two);
@@ -234,14 +251,14 @@ test("redo walks forward again until a new change overrides it", () => {
 // so a failure reproduces.
 test("any run of edits undoes and redoes through every state it passed", () => {
   let seed = 7;
-  const rand = (n) => {
+  const rand = (n: number) => {
     seed = (seed * 1103515245 + 12345) % 2 ** 31;
     return seed % n;
   };
   let minted = 0;
 
-  const edit = ({ nodes, edges }) => {
-    const pick = (list) => list[rand(list.length)];
+  const edit = ({ nodes, edges }: Graph): Graph => {
+    const pick = <T>(list: T[]) => list[rand(list.length)];
     switch (rand(6)) {
       case 0: // add, somewhere in the middle
       {
@@ -299,17 +316,17 @@ test("any run of edits undoes and redoes through every state it passed", () => {
   };
 
   const states = [graph([box("a"), box("b"), box("c")])];
-  const steps = [];
+  const steps: Step[] = [];
   for (let i = 0; i < 400; i++) {
-    const next = edit(states.at(-1));
-    const step = diffGraph(states.at(-1), next);
+    const next = edit(states.at(-1)!);
+    const step = diffGraph(states.at(-1)!, next);
     if (!step) continue;
     steps.push(step);
     states.push(next);
   }
   assert.ok(steps.length > 300);
 
-  let g = states.at(-1);
+  let g = states.at(-1)!;
   for (let i = steps.length - 1; i >= 0; i--) {
     g = applyStep(g, steps[i], "undo");
     assert.deepEqual(g, states[i], `undo of step ${i}`);

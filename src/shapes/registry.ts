@@ -1,4 +1,6 @@
-import { rect, ellipse, path, line, label, rule } from "../ops.js";
+import { rect, ellipse, path, line, label, rule } from "../ops.ts";
+import type { Op } from "../ops.ts";
+import type { Size } from "../types.ts";
 
 // One path generator per shape, parameterised on the node's width and height.
 //
@@ -11,17 +13,29 @@ import { rect, ellipse, path, line, label, rule } from "../ops.js";
 // assume a particular size: everything derives from w and h so a shape stays
 // itself when resized.
 
-const n = (v) => Math.round(v * 100) / 100;
+export type ShapeDef = {
+  label: string;
+  size: Size;
+  draw: (w: number, h: number) => Op[];
+};
+
+// A registry entry: its definition, plus the key it is filed under and the
+// palette group it shows in.
+export type Shape = ShapeDef & { key: string; group: string };
+
+type ShapeSet = Record<string, ShapeDef>;
+
+const n = (v: number) => Math.round(v * 100) / 100;
 
 // Corner radius that stays proportionate at small sizes but does not grow
 // absurd on a wide node.
-const soft = (w, h) => n(Math.min(10, Math.min(w, h) * 0.22));
+const soft = (w: number, h: number) => n(Math.min(10, Math.min(w, h) * 0.22));
 // Diagonal inset used by hexagons, parallelograms and trapezoids.
-const slant = (w, h) => n(Math.min(w * 0.22, h * 0.62));
+const slant = (w: number, h: number) => n(Math.min(w * 0.22, h * 0.62));
 // Cylinder cap depth.
-const cap = (h) => n(Math.min(h * 0.2, 14));
+const cap = (h: number) => n(Math.min(h * 0.2, 14));
 
-const pad = (w, h, l = 0.12, t = 0.16) => [
+const pad = (w: number, h: number, l = 0.12, t = 0.16) => [
   n(w * l),
   n(h * t),
   n(w * (1 - l * 2)),
@@ -30,13 +44,13 @@ const pad = (w, h, l = 0.12, t = 0.16) => [
 
 // A plain centred label filling the node minus a small inset. Shapes whose
 // outline eats into the middle (diamond, triangle) pass a tighter box.
-const mid = (w, h, inx = 0.1, iny = 0.14) =>
+const mid = (w: number, h: number, inx = 0.1, iny = 0.14) =>
   label(n(w * inx), n(h * iny), n(w * (1 - inx * 2)), n(h * (1 - iny * 2)));
 
 // ---------------------------------------------------------------------------
 // Terminators and junctions
 // ---------------------------------------------------------------------------
-const TERM = {
+const TERM: ShapeSet = {
   circle: {
     label: "Circle",
     size: [96, 96],
@@ -113,7 +127,7 @@ const TERM = {
 // ---------------------------------------------------------------------------
 // Process and decision
 // ---------------------------------------------------------------------------
-const PROC = {
+const PROC: ShapeSet = {
   rect: {
     label: "Process",
     size: [160, 48],
@@ -272,7 +286,7 @@ const PROC = {
 // ---------------------------------------------------------------------------
 // Input, output and manual steps
 // ---------------------------------------------------------------------------
-const IO = {
+const IO: ShapeSet = {
   "lean-r": {
     label: "Input / output",
     size: [170, 48],
@@ -374,11 +388,11 @@ const IO = {
 // ---------------------------------------------------------------------------
 // Documents
 // ---------------------------------------------------------------------------
-const wave = (w, h, top) =>
+const wave = (w: number, h: number, top: number) =>
   `Q${n(w * 0.75)} ${n(h + (h - top) * 0.0)} ${n(w / 2)} ${n(top + (h - top) * 0.55)}` +
   ` T1 ${n(top)}`;
 
-const docOutline = (w, h) => {
+const docOutline = (w: number, h: number) => {
   const base = n(h * 0.8);
   return (
     `M1 1 H${n(w - 1)} V${base}` +
@@ -387,7 +401,7 @@ const docOutline = (w, h) => {
   );
 };
 
-const DOCS = {
+const DOCS: ShapeSet = {
   doc: {
     label: "Document",
     size: [160, 64],
@@ -458,12 +472,12 @@ const DOCS = {
 // ---------------------------------------------------------------------------
 // Storage
 // ---------------------------------------------------------------------------
-const cylBody = (w, h) => {
+const cylBody = (w: number, h: number) => {
   const c = cap(h);
   return `M1 ${n(c)} V${n(h - c)} A${n(w / 2 - 1)} ${c} 0 0 0 ${n(w - 1)} ${n(h - c)} V${n(c)}`;
 };
 
-const STORE = {
+const STORE: ShapeSet = {
   cyl: {
     label: "Database",
     size: [140, 88],
@@ -539,7 +553,7 @@ const STORE = {
 // ---------------------------------------------------------------------------
 // Annotation and free form
 // ---------------------------------------------------------------------------
-const braceLeft = (x, h, dir) => {
+const braceLeft = (x: number, h: number, dir: number) => {
   const k = 9 * dir;
   return (
     `M${n(x + k)} 1 Q${n(x)} 1 ${n(x)} ${n(h * 0.2)}` +
@@ -549,7 +563,7 @@ const braceLeft = (x, h, dir) => {
   );
 };
 
-const ANNO = {
+const ANNO: ShapeSet = {
   brace: {
     label: "Comment",
     size: [160, 64],
@@ -590,8 +604,8 @@ const ANNO = {
     label: "Bang",
     size: [150, 92],
     draw: (w, h) => {
-      const X = (p) => n(w * p);
-      const Y = (p) => n(h * p);
+      const X = (p: number) => n(w * p);
+      const Y = (p: number) => n(h * p);
       return [
         path(
           `M${X(0.02)} ${Y(0.5)} L${X(0.16)} ${Y(0.22)} L${X(0.3)} ${Y(0.34)}` +
@@ -607,8 +621,8 @@ const ANNO = {
     label: "Cloud",
     size: [160, 92],
     draw: (w, h) => {
-      const X = (p) => n(w * p);
-      const Y = (p) => n(h * p);
+      const X = (p: number) => n(w * p);
+      const Y = (p: number) => n(h * p);
       return [
         path(
           `M${X(0.2)} ${Y(0.92)} Q${X(0.02)} ${Y(0.92)} ${X(0.05)} ${Y(0.64)}` +
@@ -669,7 +683,7 @@ const ANNO = {
 };
 
 // ---------------------------------------------------------------------------
-export const SHAPE_GROUPS = [
+export const SHAPE_GROUPS: [id: string, title: string, set: ShapeSet][] = [
   ["term", "Terminators & junctions", TERM],
   ["proc", "Process & decision", PROC],
   ["io", "Input, output & manual", IO],
@@ -678,22 +692,25 @@ export const SHAPE_GROUPS = [
   ["anno", "Annotation & free form", ANNO],
 ];
 
-export const SHAPES = SHAPE_GROUPS.reduce((acc, [group, , set]) => {
-  for (const [key, def] of Object.entries(set))
-    acc[key] = { ...def, key, group };
-  return acc;
-}, {});
+export const SHAPES = SHAPE_GROUPS.reduce<Record<string, Shape>>(
+  (acc, [group, , set]) => {
+    for (const [key, def] of Object.entries(set))
+      acc[key] = { ...def, key, group };
+    return acc;
+  },
+  {},
+);
 
 export const SHAPE_KEYS = Object.keys(SHAPES);
 export const DEFAULT_SHAPE = "rect";
 
-export const shapeDef = (key) => SHAPES[key] ?? SHAPES[DEFAULT_SHAPE];
-export const defaultSize = (key) => shapeDef(key).size;
+export const shapeDef = (key: string): Shape => SHAPES[key] ?? SHAPES[DEFAULT_SHAPE];
+export const defaultSize = (key: string) => shapeDef(key).size;
 
 // The whole Box contract, in four lines. A shape it has never heard of falls
 // back to a rectangle rather than throwing — an unknown shape in an imported
 // document should render as something, not blow up the canvas.
-export const drawShape = (key, w, h) => shapeDef(key).draw(w, h);
+export const drawShape = (key: string, w: number, h: number) => shapeDef(key).draw(w, h);
 
 // ---------------------------------------------------------------------------
 // The extension contract.
@@ -703,7 +720,14 @@ export const drawShape = (key, w, h) => shapeDef(key).draw(w, h);
 // reference theme TOKENS — never literal colours — so a document theme can
 // restyle it without the package knowing the theme exists. Nothing in core
 // changes; both walkers pick it up because both only ever see ops.
-export function registerShape(def) {
+export type ShapePackage = Partial<ShapeDef> &
+  Pick<ShapeDef, "draw"> & {
+    key: string;
+    group?: string;
+    groupLabel?: string;
+  };
+
+export function registerShape(def: ShapePackage) {
   if (!def?.key || typeof def.draw !== "function") {
     throw new Error("registerShape: needs { key, draw(w, h) }");
   }

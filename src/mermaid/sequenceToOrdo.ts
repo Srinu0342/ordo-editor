@@ -1,21 +1,26 @@
-import { measureText as defaultMeasure, wrapText } from "../measure.js";
-import { flatten } from "../ops.js";
-import { drawShape } from "../shapes/registry.js";
-import { DEFAULT_EDGE_STYLE, applyEdgeStyle } from "../edgeStyle.js";
-import { TUBE_TYPE, TRACK } from "../nodes/tube.js";
+import { measureText as defaultMeasure, wrapText } from "../measure.ts";
+import type { Font, Measure, TextSize } from "../measure.ts";
+import { flatten } from "../ops.ts";
+import type { LabelOp } from "../ops.ts";
+import { drawShape } from "../shapes/registry.ts";
+import { DEFAULT_EDGE_STYLE, applyEdgeStyle } from "../edgeStyle.ts";
+import { TUBE_TYPE, TRACK } from "../nodes/tube.ts";
 import {
   FRAGMENT_TYPE,
   GUARD_BAND,
   TAB_H,
   headerWidth,
-} from "../nodes/fragment.js";
+} from "../nodes/fragment.ts";
+import type { MessageEntry, SequenceActor, SequenceModel } from "./sequence.ts";
+import type { Fragment } from "./sequence.ts";
+import type { Attach, NodeData, OrdoEdge, SizedNode } from "../types.ts";
 
 // Sequence import, part two: the structural model → Ordo nodes and edges.
 //
 // Every coordinate is Ordo's own, worked out here with two running sums —
 // columns across, a cursor down — and nothing taken from Mermaid's renderer.
 // Text is measured with an injected `measureText` (by default the shared table
-// in measure.js), so an import comes out the same in a browser, on a server and
+// in measure.ts), so an import comes out the same in a browser, on a server and
 // in a test.
 //
 // What comes out is the tube's reading of a sequence diagram:
@@ -35,9 +40,14 @@ import {
 // Because bars and tracks RIDE their lifelines, moving a participant's header
 // and foot carries every bar on that lifeline — and every message on those
 // bars — along with it.
+//
+// The layout fills a run of lookup tables from the model — columns, pill and
+// note sizes, the y of every row — and reads them back further down. A `!` on
+// one of those reads marks a key the table was filled with from the same
+// model, never a lookup that can miss.
 
-const n2 = (v) => Math.round(v * 100) / 100;
-const clamp01 = (v) => Math.min(1, Math.max(0, v));
+const n2 = (v: number) => Math.round(v * 100) / 100;
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
 // The fonts each piece is drawn in.
 const ACTOR_FONT = { size: 14, weight: 600 }; // Box's label slot
@@ -110,7 +120,7 @@ const DASHED = "8 4"; // LINE_TYPES' "dashed", so the toolbar reads it back
 
 // Participant type → shape. The robustness icons (boundary, control, entity)
 // have no shape of their own yet; an ellipse is the nearest honest stand-in.
-const SHAPE_FOR = {
+const SHAPE_FOR: Record<string, string> = {
   participant: "rect",
   actor: "person",
   database: "cyl",
@@ -121,18 +131,25 @@ const SHAPE_FOR = {
   entity: "circle",
 };
 
-const headId = (actor) => `seq:head:${actor}`;
-const footId = (actor) => `seq:foot:${actor}`;
-const lifeId = (actor) => `seq:life:${actor}`;
+const headId = (actor: string) => `seq:head:${actor}`;
+const footId = (actor: string) => `seq:foot:${actor}`;
+const lifeId = (actor: string) => `seq:life:${actor}`;
 
 // The label slot a shape gives its text at a size — read from the registry, so
 // a box is sized by the very geometry that will draw it.
-const slotOf = (shape, w, h) =>
-  flatten(drawShape(shape, w, h)).find((op) => op.op === "label") ?? null;
+const slotOf = (shape: string, w: number, h: number) =>
+  flatten(drawShape(shape, w, h)).find(
+    (op): op is LabelOp => op.op === "label",
+  ) ?? null;
 
 // The smallest box, no smaller than minW × minH, whose label slot holds `size`
 // with LABEL_PAD either side. Slots grow with their box, so a few steps settle.
-function fitShape(shape, size, minW, minH) {
+function fitShape(
+  shape: string,
+  size: { width: number; height: number },
+  minW: number,
+  minH: number,
+) {
   let w = minW;
   let h = minH;
   for (let step = 0; step < 4; step++) {
@@ -147,7 +164,41 @@ function fitShape(shape, size, minW, minH) {
   return { w: Math.ceil(w), h: Math.ceil(h) };
 }
 
-const boxNode = (id, x, y, w, h, data) => ({
+// A participant's column.
+type Column = SequenceActor & {
+  text: string;
+  shape: string;
+  size: TextSize;
+  w: number;
+};
+
+// A tube the layout lays down: a bar for an activation, or a lifeline's track.
+type Tube = {
+  id: string;
+  actor: string;
+  track: boolean;
+  depth: number;
+  x: number;
+  top: number;
+  bottom: number;
+  width: number;
+  attach: Attach;
+  taps: number[];
+  index?: Map<number, number>; // tap offset → handle number, once settled
+};
+
+// Where a message ends: a tap on a tube, or a named handle on a box.
+type Tap = { tube: Tube; at: number; side: string };
+type Handle = { node: string; handle: string };
+
+const boxNode = (
+  id: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  data: NodeData,
+): SizedNode => ({
   id,
   type: "box",
   position: { x: n2(x), y: n2(y) },
@@ -155,7 +206,15 @@ const boxNode = (id, x, y, w, h, data) => ({
   data,
 });
 
-const frameNode = (id, x, y, w, h, zIndex, data) => ({
+const frameNode = (
+  id: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  zIndex: number,
+  data: NodeData,
+): SizedNode => ({
   id,
   type: FRAGMENT_TYPE,
   position: { x: n2(x), y: n2(y) },
@@ -171,20 +230,24 @@ const frameNode = (id, x, y, w, h, zIndex, data) => ({
  *                     the shared table unless a caller injects another
  * @returns { nodes, edges, warnings }
  */
-export function sequenceToOrdo(model, { measureText = defaultMeasure } = {}) {
+export function sequenceToOrdo(
+  model: SequenceModel,
+  { measureText = defaultMeasure }: { measureText?: Measure } = {},
+): { nodes: SizedNode[]; edges: OrdoEdge[]; warnings: string[] } {
   const measure = measureText;
-  const wrap = (text, font, on) =>
+  const wrap = (text: string, font: Font, on: boolean) =>
     on ? wrapText(text, WRAP_W, font, measure) : text;
 
   // --- columns --------------------------------------------------------------
   const col = new Map(model.actors.map((a, i) => [a.id, i]));
-  const cols = model.actors.map((a) => {
+  const cols = model.actors.map((a): Column => {
     const text = wrap(a.label, ACTOR_FONT, a.wrap);
     return {
       ...a,
       text,
       shape: SHAPE_FOR[a.kind] ?? "rect",
       size: measure(text || " ", ACTOR_FONT),
+      w: 0, // set below, once the header height is known
     };
   });
   const N = cols.length;
@@ -198,8 +261,8 @@ export function sequenceToOrdo(model, { measureText = defaultMeasure } = {}) {
 
   // What each message says, numbered if autonumber was on, and the size of
   // the pill it is drawn in.
-  const shown = new Map();
-  const pills = new Map();
+  const shown = new Map<number, string>();
+  const pills = new Map<number, { w: number; h: number }>();
   for (const e of model.entries) {
     if (e.kind !== "message") continue;
     const body = wrap(e.label, MESSAGE_FONT, e.wrap);
@@ -217,7 +280,10 @@ export function sequenceToOrdo(model, { measureText = defaultMeasure } = {}) {
     });
   }
 
-  const notes = new Map();
+  const notes = new Map<
+    number,
+    { text: string; w: number; h: number; x: number | null; y: number | null }
+  >();
   for (const e of model.entries) {
     if (e.kind !== "note") continue;
     const text = wrap(e.label, NOTE_FONT, e.wrap);
@@ -227,7 +293,7 @@ export function sequenceToOrdo(model, { measureText = defaultMeasure } = {}) {
 
   // Centre-to-centre gaps: the boxes and the margin between them, plus room
   // for a participant box's padding where one box ends and the next begins…
-  const seam = (i) =>
+  const seam = (i: number) =>
     cols[i].box === cols[i + 1].box
       ? 0
       : (cols[i].box != null ? BOX_PAD : 0) +
@@ -239,17 +305,17 @@ export function sequenceToOrdo(model, { measureText = defaultMeasure } = {}) {
   );
 
   // …widened wherever a label needs more room than that.
-  const needs = [];
-  const need = (lo, hi, d) => {
+  const needs: { lo: number; hi: number; d: number; order: number }[] = [];
+  const need = (lo: number, hi: number, d: number) => {
     if (lo >= 0 && hi < N && lo < hi && d > 0)
       needs.push({ lo, hi, d, order: needs.length });
   };
 
   for (const e of model.entries) {
     if (e.kind === "message") {
-      const a = col.get(e.from);
-      const b = col.get(e.to);
-      const p = pills.get(e.streamIdx);
+      const a = col.get(e.from)!;
+      const b = col.get(e.to)!;
+      const p = pills.get(e.streamIdx)!;
       if (e.self) {
         // the label sits east of the loop, short of the next lifeline
         need(a, a + 1, BAR_W * 2 + HANDLE_REACH + SELF_LOOP + LABEL_GAP + p.w + CLEAR);
@@ -264,9 +330,9 @@ export function sequenceToOrdo(model, { measureText = defaultMeasure } = {}) {
         p.w + 2 * (BAR_W + CLEAR) + (boxed != null ? cols[boxed].w / 2 : 0),
       );
     } else if (e.kind === "note") {
-      const a = col.get(e.from);
-      const b = col.get(e.to);
-      const { w } = notes.get(e.streamIdx);
+      const a = col.get(e.from)!;
+      const b = col.get(e.to)!;
+      const { w } = notes.get(e.streamIdx)!;
       const beside = w + NOTE_GAP + 2 * BAR_W + CLEAR;
       if (e.placement === "left") need(a - 1, a, beside);
       else if (e.placement === "right") need(a, a + 1, beside);
@@ -289,7 +355,7 @@ export function sequenceToOrdo(model, { measureText = defaultMeasure } = {}) {
     for (let i = lo; i < hi; i++) gaps[i] += share;
   }
 
-  const cx = [];
+  const cx: number[] = [];
   cols.forEach((c, i) =>
     cx.push(
       i === 0 ? (c.box != null ? BOX_PAD : 0) + c.w / 2 : cx[i - 1] + gaps[i - 1],
@@ -299,9 +365,9 @@ export function sequenceToOrdo(model, { measureText = defaultMeasure } = {}) {
   // Notes across: centred over, or beside, their lifelines.
   for (const e of model.entries) {
     if (e.kind !== "note") continue;
-    const g = notes.get(e.streamIdx);
-    const a = col.get(e.from);
-    const b = col.get(e.to);
+    const g = notes.get(e.streamIdx)!;
+    const a = col.get(e.from)!;
+    const b = col.get(e.to)!;
     if (e.placement === "left") g.x = cx[a] - BAR_W / 2 - NOTE_GAP - g.w;
     else if (e.placement === "right") g.x = cx[a] + BAR_W / 2 + NOTE_GAP;
     else {
@@ -320,28 +386,31 @@ export function sequenceToOrdo(model, { measureText = defaultMeasure } = {}) {
   // band, a divider, a foot — or frames would sit on top of the rows they hold.
   // Activation markers take none: a bar starts at the arrow that opens it and
   // ends where the cursor stands when it closes.
-  const frameOf = new Map();
-  const visit = (list) =>
+  const frameOf = new Map<number, Fragment>();
+  const visit = (list: Fragment[]) =>
     list.forEach((f) => {
       frameOf.set(f.id, f);
       visit(f.children);
     });
   visit(model.fragments);
 
-  const arrowY = new Map(); // message → y of its line
-  const returnY = new Map(); // self-message → y its loop comes back at
-  const barY = new Map(); // span id → { top, bottom }
-  const frameY = new Map(); // fragment id → { top, bottom, dividers }
-  const headY = new Map(); // created participant → its header's top
-  const footY = new Map(); // destroyed participant → its foot's top
+  const arrowY = new Map<number, number>(); // message → y of its line
+  const returnY = new Map<number, number>(); // self-message → y its loop comes back at
+  const barY = new Map<number, { top: number; bottom: number | null }>(); // span id → { top, bottom }
+  const frameY = new Map<
+    number,
+    { top: number; bottom: number | null; dividers: number[] }
+  >(); // fragment id → { top, bottom, dividers }
+  const headY = new Map<string, number>(); // created participant → its header's top
+  const footY = new Map<string, number>(); // destroyed participant → its foot's top
 
   let cursor = headerH;
-  let last = null; // what last moved the cursor
+  let last: "message" | "note" | "frame" | null = null; // what last moved the cursor
 
   for (const e of model.entries) {
     switch (e.kind) {
       case "message": {
-        const p = pills.get(e.streamIdx);
+        const p = pills.get(e.streamIdx)!;
         const boxed = e.creates || e.destroys;
         const y =
           cursor +
@@ -366,7 +435,7 @@ export function sequenceToOrdo(model, { measureText = defaultMeasure } = {}) {
         break;
       }
       case "note": {
-        const g = notes.get(e.streamIdx);
+        const g = notes.get(e.streamIdx)!;
         g.y = cursor + NOTE_MARGIN;
         cursor = g.y + g.h;
         last = "note";
@@ -393,7 +462,7 @@ export function sequenceToOrdo(model, { measureText = defaultMeasure } = {}) {
         break;
       }
       case "mid": {
-        const g = frameY.get(e.fragment);
+        const g = frameY.get(e.fragment)!;
         const y = cursor + DIVIDER_GAP;
         g.dividers.push(y);
         cursor = y + GUARD_BAND;
@@ -401,7 +470,7 @@ export function sequenceToOrdo(model, { measureText = defaultMeasure } = {}) {
         break;
       }
       case "close": {
-        const g = frameY.get(e.fragment);
+        const g = frameY.get(e.fragment)!;
         const rect = frameOf.get(e.fragment)?.operator === "rect";
         g.bottom = cursor + (rect ? RECT_PAD : FRAME_FOOT);
         cursor = g.bottom;
@@ -422,8 +491,13 @@ export function sequenceToOrdo(model, { measureText = defaultMeasure } = {}) {
   });
 
   // A rider's `t` puts its CENTRE on the path, which is what TubeFollower reads.
-  const riding = (actor, top, height, shift = 0) => {
-    const life = lifelines[col.get(actor)];
+  const riding = (
+    actor: string,
+    top: number,
+    height: number,
+    shift = 0,
+  ): Attach => {
+    const life = lifelines[col.get(actor)!];
     const t = clamp01((top + height / 2 - life.from) / life.length);
     return {
       edgeId: lifeId(actor),
@@ -433,7 +507,7 @@ export function sequenceToOrdo(model, { measureText = defaultMeasure } = {}) {
     };
   };
 
-  const tracks = new Map(
+  const tracks = new Map<string, Tube>(
     cols.map((c, i) => {
       const life = lifelines[i];
       return [
@@ -454,7 +528,7 @@ export function sequenceToOrdo(model, { measureText = defaultMeasure } = {}) {
     }),
   );
 
-  const bars = [];
+  const bars: Tube[] = [];
   for (const s of model.spans) {
     const g = barY.get(s.id);
     const i = col.get(s.actor);
@@ -475,34 +549,35 @@ export function sequenceToOrdo(model, { measureText = defaultMeasure } = {}) {
   }
   bars.sort((p, q) => p.depth - q.depth || p.top - q.top);
 
-  const barsOf = new Map();
+  const barsOf = new Map<string, Tube[]>();
   for (const b of bars) barsOf.set(b.actor, [...(barsOf.get(b.actor) ?? []), b]);
 
   // Where a message lands on a lifeline: the innermost activation holding that
   // y, or the track when none does.
-  const tubeAt = (actor, y) => {
-    let best = null;
+  const tubeAt = (actor: string, y: number) => {
+    let best: Tube | null = null;
     for (const b of barsOf.get(actor) ?? []) {
       if (y < b.top || y > b.bottom) continue;
       if (!best || b.depth > best.depth || (b.depth === best.depth && b.top > best.top))
         best = b;
     }
-    return best ?? tracks.get(actor);
+    return best ?? tracks.get(actor)!;
   };
 
-  const tap = (tube, y, side) => {
+  const tap = (tube: Tube, y: number, side: string): Tap => {
     const at = n2(y - tube.top);
     tube.taps.push(at);
     return { tube, at, side };
   };
 
   // Lines run east when the target is to the right; a self-message loops east.
-  const wires = [];
+  const wires: { e: MessageEntry; source: Tap | Handle; target: Tap | Handle }[] =
+    [];
   for (const e of model.entries) {
     if (e.kind !== "message") continue;
-    const y = arrowY.get(e.streamIdx);
-    const east = col.get(e.to) >= col.get(e.from);
-    const back = e.self ? returnY.get(e.streamIdx) : y;
+    const y = arrowY.get(e.streamIdx)!;
+    const east = col.get(e.to)! >= col.get(e.from)!;
+    const back = e.self ? returnY.get(e.streamIdx)! : y;
     const source =
       e.destroys === "from"
         ? { node: footId(e.from), handle: east ? "e" : "w" }
@@ -516,42 +591,43 @@ export function sequenceToOrdo(model, { measureText = defaultMeasure } = {}) {
   }
 
   // Taps go in head-to-tail order, so a tube's +/− works on its last one.
-  const settle = (tube) => {
+  const settle = (tube: Tube) => {
     tube.taps = [...new Set(tube.taps)].sort((p, q) => p - q);
     tube.index = new Map(tube.taps.map((at, i) => [at, i]));
   };
   tracks.forEach(settle);
   bars.forEach(settle);
-  const end = (ref) =>
-    ref.tube
-      ? { node: ref.tube.id, handle: `${ref.side}${ref.tube.index.get(ref.at)}` }
+  const end = (ref: Tap | Handle): Handle =>
+    "tube" in ref
+      ? { node: ref.tube.id, handle: `${ref.side}${ref.tube.index!.get(ref.at)}` }
       : ref;
 
   // --- frames across: what they hold, padded ---------------------------------
-  const spanAll = () =>
+  const spanAll = (): [number, number] =>
     N
       ? [cx[0] - cols[0].w / 2, cx[N - 1] + cols[N - 1].w / 2]
       : [0, COL_MIN_W];
-  const extents = new Map();
-  const frameX = (f) => {
-    if (extents.has(f.id)) return extents.get(f.id);
+  const extents = new Map<number, { x1: number; x2: number }>();
+  const frameX = (f: Fragment): { x1: number; x2: number } => {
+    if (extents.has(f.id)) return extents.get(f.id)!;
     let x1 = Infinity;
     let x2 = -Infinity;
-    const take = (l, r) => {
+    const take = (l: number, r: number) => {
       x1 = Math.min(x1, l);
       x2 = Math.max(x2, r);
     };
     for (const e of model.entries) {
-      if (e.streamIdx <= f.open || e.streamIdx >= f.close) continue;
+      // only a closed frame is ever filed in the tree
+      if (e.streamIdx <= f.open || e.streamIdx >= f.close!) continue;
       if (e.kind === "message") {
-        const a = cx[col.get(e.from)];
-        const b = cx[col.get(e.to)];
+        const a = cx[col.get(e.from)!];
+        const b = cx[col.get(e.to)!];
         if (e.self)
-          take(a, a + BAR_W + HANDLE_REACH + SELF_LOOP + LABEL_GAP + pills.get(e.streamIdx).w);
+          take(a, a + BAR_W + HANDLE_REACH + SELF_LOOP + LABEL_GAP + pills.get(e.streamIdx)!.w);
         else take(Math.min(a, b), Math.max(a, b));
       } else if (e.kind === "note") {
-        const g = notes.get(e.streamIdx);
-        take(g.x, g.x + g.w);
+        const g = notes.get(e.streamIdx)!;
+        take(g.x!, g.x! + g.w);
       }
     }
     // A child is taken WITH its padding, so each level of nesting adds a
@@ -568,7 +644,7 @@ export function sequenceToOrdo(model, { measureText = defaultMeasure } = {}) {
   };
 
   // --- emit -------------------------------------------------------------------
-  const nodes = [];
+  const nodes: SizedNode[] = [];
 
   // Frames first, outer before inner, so nested frames paint in order.
   model.boxes.forEach((box) => {
@@ -589,7 +665,7 @@ export function sequenceToOrdo(model, { measureText = defaultMeasure } = {}) {
     );
   });
 
-  const emitFrames = (list) =>
+  const emitFrames = (list: Fragment[]) =>
     list.forEach((f) => {
       const x = frameX(f);
       const y = frameY.get(f.id);
@@ -633,11 +709,11 @@ export function sequenceToOrdo(model, { measureText = defaultMeasure } = {}) {
   // Notes over the lifelines they annotate, as Mermaid paints them. (The
   // diagram's title is not drawn here: it names the group the import lands in.)
   for (const [streamIdx, g] of notes)
-    nodes.push(boxNode(`seq:note:${streamIdx}`, g.x, g.y, g.w, g.h, { shape: "note", label: g.text }));
+    nodes.push(boxNode(`seq:note:${streamIdx}`, g.x!, g.y!, g.w, g.h, { shape: "note", label: g.text }));
 
   // Lifelines first: when a dragged bar is dropped where a lifeline and a
   // message cross, the tie goes to the lifeline it came from.
-  const edges = cols.map((c) =>
+  const edges: OrdoEdge[] = cols.map((c) =>
     applyEdgeStyle(
       {
         id: lifeId(c.id),

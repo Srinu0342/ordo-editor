@@ -1,10 +1,11 @@
 import { ViewportPortal } from "@xyflow/react";
+import type { Guide } from "../alignment.ts";
 
 // Interaction chrome, like the selection tint: drawn in the viewport so the
 // lines sit in canvas coordinates, never part of any op-list or export.
 const GUIDE_COLOR = "#f43f5e";
 
-export default function AlignmentGuides({ guides }) {
+export default function AlignmentGuides({ guides }: { guides: Guide[] }) {
   if (!guides.length) return null;
 
   return (

@@ -1,8 +1,11 @@
 import { useCallback } from "react";
+import type { CSSProperties } from "react";
 import { useReactFlow, NodeResizer } from "@xyflow/react";
-import { LIGHT } from "../theme.js";
-import EditableLabel from "./EditableLabel.jsx";
-import { Anchors, nodeTheme } from "./chrome.jsx";
+import type { NodeProps } from "@xyflow/react";
+import { LIGHT } from "../theme.ts";
+import EditableLabel from "./EditableLabel.tsx";
+import { Anchors, nodeTheme } from "./chrome.tsx";
+import type { NodeData, OrdoEdge, OrdoNode } from "../types.ts";
 
 // Stacked sections with independent content — UML class, ER entity, record.
 //
@@ -14,34 +17,38 @@ import { Anchors, nodeTheme } from "./chrome.jsx";
 // derived value to recompute. Both answers are defensible; the point is that
 // building only Box and Container lets the question stay unasked.
 
-const rowStyle = {
+const rowStyle: CSSProperties = {
   padding: "3px 9px",
   fontSize: 12.5,
   fontFamily: "system-ui, sans-serif",
   display: "flex",
 };
 
-export default function CompartmentNode({ id, data, selected }) {
-  const { setNodes } = useReactFlow();
+export default function CompartmentNode({
+  id,
+  data,
+  selected,
+}: NodeProps<OrdoNode>) {
+  const { setNodes } = useReactFlow<OrdoNode, OrdoEdge>();
   const theme = nodeTheme(selected);
   const sections = data.sections ?? [["field: type"], ["method()"]];
 
   const patch = useCallback(
-    (fn) =>
+    (fn: (data: NodeData) => NodeData) =>
       setNodes((nds) =>
         nds.map((nd) => (nd.id === id ? { ...nd, data: fn(nd.data) } : nd)),
       ),
     [id, setNodes],
   );
 
-  const setRow = (si, ri, value) =>
+  const setRow = (si: number, ri: number, value: string) =>
     patch((d) => {
       const next = (d.sections ?? sections).map((s) => s.slice());
       next[si][ri] = value;
       return { ...d, sections: next };
     });
 
-  const addRow = (si) =>
+  const addRow = (si: number) =>
     patch((d) => {
       const next = (d.sections ?? sections).map((s) => s.slice());
       next[si].push("");

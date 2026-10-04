@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import {
   applyEdges,
   applyNodes,
   applyStep,
   createUndoStack,
   diffGraph,
-} from "./history.js";
+} from "./history.ts";
+import type { Direction, Step } from "./history.ts";
+import type { Graph, OrdoEdge, OrdoNode } from "./types.ts";
 
-// Undo history: the React half. history.js says what a step is; this decides
+// Undo history: the React half. history.ts says what a step is; this decides
 // where one ends.
 //
 // Nothing asks for a step to be recorded. Whenever the user starts something
@@ -43,24 +46,32 @@ const NOT_TEXT = new Set([
  * is not such a field: after picking from one, the chords still reach the
  * canvas. App's chords use this too, so the two agree on what typing is.
  */
-export const isTyping = (el) =>
+export const isTyping = (el: EventTarget | null) =>
   el instanceof HTMLElement &&
   (el.isContentEditable ||
     el.tagName === "TEXTAREA" ||
-    (el.tagName === "INPUT" && !NOT_TEXT.has(el.type)));
+    (el.tagName === "INPUT" && !NOT_TEXT.has((el as HTMLInputElement).type)));
 
 // Each of these ends whatever pointer was held. A native drag swallows its
 // pointerup, and so can a context menu; a window that loses focus may never
 // hear it at all (the `blur` below).
 const RELEASES = ["pointerup", "pointercancel", "dragend", "drop", "contextmenu"];
 
-export function useHistory({ nodes, edges, setNodes, setEdges }) {
-  const live = useRef(null);
+export function useHistory({
+  nodes,
+  edges,
+  setNodes,
+  setEdges,
+}: Graph & {
+  setNodes: Dispatch<SetStateAction<OrdoNode[]>>;
+  setEdges: Dispatch<SetStateAction<OrdoEdge[]>>;
+}) {
+  const live = useRef<Graph>({ nodes, edges });
   live.current = { nodes, edges };
 
   // The graph as of the last boundary: what the open step is diffed against.
   const baseline = useRef(live.current);
-  const [stack] = useState(createUndoStack);
+  const [stack] = useState(createUndoStack<Step>);
   const held = useRef(false);
 
   // Closes the open step, if anything in it changed.
@@ -71,7 +82,7 @@ export function useHistory({ nodes, edges, setNodes, setEdges }) {
   }, [stack]);
 
   const travel = useCallback(
-    (direction) => {
+    (direction: Direction) => {
       if (held.current) return;
 
       // An edit still open is closed first. Before an undo it is what gets
@@ -91,11 +102,11 @@ export function useHistory({ nodes, edges, setNodes, setEdges }) {
   );
 
   useEffect(() => {
-    const press = (event) => {
+    const press = (event: PointerEvent) => {
       if (event.button === 0) held.current = true;
       if (!isTyping(event.target)) checkpoint();
     };
-    const key = (event) => {
+    const key = (event: KeyboardEvent) => {
       if (!held.current && !isTyping(event.target)) checkpoint();
     };
     const release = () => {

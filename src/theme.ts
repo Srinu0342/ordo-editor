@@ -5,7 +5,10 @@
 // rather than by component, so a third-party node package declares the tokens
 // it needs and a document theme can satisfy them without knowing the package.
 
-export const LIGHT = {
+// Token → colour. Open-ended on purpose: a package's tokens are not known here.
+export type Theme = Record<string, string>;
+
+export const LIGHT: Theme = {
   "node.fill": "#ffffff",
   "node.stroke": "#94a3b8",
   "node.stroke.selected": "#6366f1",
@@ -26,7 +29,7 @@ export const LIGHT = {
   "canvas.grid": "#e2e8f0",
 };
 
-export const DARK = {
+export const DARK: Theme = {
   ...LIGHT,
   "node.fill": "#161e26",
   "node.stroke": "#64748b",
@@ -46,7 +49,7 @@ export const THEMES = { light: LIGHT, dark: DARK };
 // Resolution is the renderer's job, never the generator's. Unknown tokens fall
 // through as literals so a shape can still hardcode a colour in a pinch and a
 // typo shows up as an obviously wrong colour rather than a silent black.
-export const resolve = (theme, token) => {
+export const resolve = (theme: Theme, token: string | undefined) => {
   if (token == null || token === "none" || token === "transparent")
     return token;
   return theme[token] ?? token;

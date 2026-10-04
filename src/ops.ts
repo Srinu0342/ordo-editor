@@ -17,7 +17,65 @@ export const OP = {
   LINE: "line",
   LABEL: "label",
   GROUP: "group",
+} as const;
+
+// Fill and stroke are theme tokens ("node.fill") or, in a pinch, literals; see
+// theme.ts. `width` is the stroke's, and `dash` an SVG stroke-dasharray.
+export type Paint = {
+  fill: string;
+  stroke: string;
+  width: number;
+  dash?: string;
 };
+
+export type RectOp = Paint & {
+  op: typeof OP.RECT;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  rx: number;
+};
+
+export type EllipseOp = Paint & {
+  op: typeof OP.ELLIPSE;
+  cx: number;
+  cy: number;
+  rx: number;
+  ry: number;
+};
+
+export type PathOp = Paint & { op: typeof OP.PATH; d: string };
+
+export type LineOp = Paint & {
+  op: typeof OP.LINE;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+};
+
+export type LabelOp = {
+  op: typeof OP.LABEL;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  align: "left" | "center" | "right";
+  valign: "top" | "middle" | "bottom";
+  size: number;
+  weight: number;
+  fill: string;
+  slot: string;
+};
+
+export type GroupOp = { op: typeof OP.GROUP; children: Op[] };
+
+export type Op = RectOp | EllipseOp | PathOp | LineOp | LabelOp | GroupOp;
+
+// Per-op overrides: anything but the op's own kind.
+type Options<T extends Op> = Partial<Omit<T, "op">>;
+export type LabelOptions = Options<LabelOp>;
 
 // Default token references. A generator overrides these per op when a shape
 // needs a second surface (a stacked copy behind, a shaded band).
@@ -25,7 +83,13 @@ const FILL = "node.fill";
 const STROKE = "node.stroke";
 const INK = "node.ink";
 
-export const rect = (x, y, w, h, o = {}) => ({
+export const rect = (
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  o: Options<RectOp> = {},
+): RectOp => ({
   op: OP.RECT,
   x,
   y,
@@ -38,7 +102,13 @@ export const rect = (x, y, w, h, o = {}) => ({
   ...o,
 });
 
-export const ellipse = (cx, cy, rx, ry, o = {}) => ({
+export const ellipse = (
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  o: Options<EllipseOp> = {},
+): EllipseOp => ({
   op: OP.ELLIPSE,
   cx,
   cy,
@@ -50,7 +120,7 @@ export const ellipse = (cx, cy, rx, ry, o = {}) => ({
   ...o,
 });
 
-export const path = (d, o = {}) => ({
+export const path = (d: string, o: Options<PathOp> = {}): PathOp => ({
   op: OP.PATH,
   d,
   fill: FILL,
@@ -59,7 +129,13 @@ export const path = (d, o = {}) => ({
   ...o,
 });
 
-export const line = (x1, y1, x2, y2, o = {}) => ({
+export const line = (
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  o: Options<LineOp> = {},
+): LineOp => ({
   op: OP.LINE,
   x1,
   y1,
@@ -74,7 +150,13 @@ export const line = (x1, y1, x2, y2, o = {}) => ({
 // A text box, not a text run. Geometry only — the renderer decides whether it
 // becomes an SVG <text> or an editable HTML overlay, which is what lets the
 // canvas have double-click editing while the headless walker still draws text.
-export const label = (x, y, w, h, o = {}) => ({
+export const label = (
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  o: LabelOptions = {},
+): LabelOp => ({
   op: OP.LABEL,
   x,
   y,
@@ -89,7 +171,7 @@ export const label = (x, y, w, h, o = {}) => ({
   ...o,
 });
 
-export const group = (children, o = {}) => ({
+export const group = (children: Op[], o: Options<GroupOp> = {}): GroupOp => ({
   op: OP.GROUP,
   children,
   ...o,
@@ -97,13 +179,22 @@ export const group = (children, o = {}) => ({
 
 // Convenience used by nearly every generator: a decoration is a thin rule in
 // the muted token with no fill.
-export const rule = (x1, y1, x2, y2, o = {}) =>
-  line(x1, y1, x2, y2, { stroke: "node.rule", width: 1.25, ...o });
+export const rule = (
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  o: Options<LineOp> = {},
+): LineOp => line(x1, y1, x2, y2, { stroke: "node.rule", width: 1.25, ...o });
 
-export const isOp = (v) => Boolean(v && typeof v === "object" && v.op);
+export const isOp = (v: unknown): v is Op =>
+  Boolean(v && typeof v === "object" && "op" in v && v.op);
 
 // Flattens groups so a walker can iterate without recursing if it prefers.
-export const flatten = (ops, out = []) => {
+export const flatten = (
+  ops: Op[],
+  out: Exclude<Op, GroupOp>[] = [],
+): Exclude<Op, GroupOp>[] => {
   for (const o of ops) {
     if (!isOp(o)) continue;
     if (o.op === OP.GROUP) flatten(o.children ?? [], out);

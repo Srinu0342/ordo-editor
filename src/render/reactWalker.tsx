@@ -6,19 +6,25 @@
 // op, same geometry, different medium — which is exactly what the op-list
 // being geometry-plus-tokens rather than SVG strings buys.
 
-import { OP } from "../ops.js";
-import { LIGHT, resolve } from "../theme.js";
+import type { CSSProperties, ReactElement } from "react";
+import { OP } from "../ops.ts";
+import type { LabelOp, Op, Paint } from "../ops.ts";
+import { LIGHT, resolve } from "../theme.ts";
+import type { Theme } from "../theme.ts";
 
-const paint = (theme, o) => ({
+// A label op with the React key it renders under.
+export type LabelSlot = LabelOp & { key: string };
+
+const paint = (theme: Theme, o: Paint) => ({
   fill: resolve(theme, o.fill ?? "none"),
   stroke: resolve(theme, o.stroke ?? "none"),
   strokeWidth: o.stroke && o.stroke !== "none" ? o.width : undefined,
   strokeDasharray: o.dash || undefined,
-  strokeLinejoin: "round",
-  strokeLinecap: "round",
+  strokeLinejoin: "round" as const,
+  strokeLinecap: "round" as const,
 });
 
-function mark(op, theme, key) {
+function mark(op: Op, theme: Theme, key: string): ReactElement | null {
   switch (op.op) {
     case OP.RECT:
       return (
@@ -69,11 +75,11 @@ function mark(op, theme, key) {
 
 // Splits the op-list into drawable marks and label slots. The node component
 // renders the marks inside one <svg> and the slots as HTML on top.
-export function walk(ops, theme = LIGHT) {
-  const marks = [];
-  const labels = [];
+export function walk(ops: Op[], theme: Theme = LIGHT) {
+  const marks: ReactElement[] = [];
+  const labels: LabelSlot[] = [];
 
-  const visit = (list, prefix) =>
+  const visit = (list: Op[], prefix: string) =>
     list.forEach((op, i) => {
       const key = `${prefix}${i}`;
       if (!op) return;
@@ -91,7 +97,12 @@ export function walk(ops, theme = LIGHT) {
 
 // Geometry for a label slot as CSS, in the node's own percentage space so it
 // tracks a resize without a re-measure.
-export const labelBox = (op, w, h, theme = LIGHT) => ({
+export const labelBox = (
+  op: LabelOp,
+  w: number,
+  h: number,
+  theme: Theme = LIGHT,
+): CSSProperties => ({
   position: "absolute",
   left: `${(op.x / w) * 100}%`,
   top: `${(op.y / h) * 100}%`,

@@ -1,8 +1,11 @@
 // The undo history's React half, driven the way the canvas drives it: writes
 // to the node list, and pointer and key events on the window between them.
 import { test } from "node:test";
+import type { TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
+import type { Dispatch, SetStateAction } from "react";
+import type { OrdoEdge, OrdoNode } from "../types.ts";
 
 // React DOM looks for a DOM when it loads, so the window goes up first.
 const { window } = new JSDOM("<!doctype html><html><body></body></html>");
@@ -15,10 +18,10 @@ Object.assign(globalThis, {
 
 const { act, createElement, useState } = await import("react");
 const { createRoot } = await import("react-dom/client");
-const { HISTORY_LIMIT } = await import("../history.js");
-const { useHistory, isTyping } = await import("../useHistory.js");
+const { HISTORY_LIMIT } = await import("../history.ts");
+const { useHistory, isTyping } = await import("../useHistory.ts");
 
-const box = (id, label = "") => ({
+const box = (id: string, label = ""): OrdoNode => ({
   id,
   type: "box",
   position: { x: 0, y: 0 },
@@ -27,11 +30,18 @@ const box = (id, label = "") => ({
 
 // A canvas with nothing on it but the two lists and the history. `view` always
 // holds the latest render; unmounting takes the window listeners down with it.
-function mount(t, nodes) {
-  const view = {};
+type View = {
+  nodes: OrdoNode[];
+  setNodes: Dispatch<SetStateAction<OrdoNode[]>>;
+  undo: () => void;
+  redo: () => void;
+};
+
+function mount(t: TestContext, nodes: OrdoNode[]) {
+  const view = {} as View;
   function Canvas() {
     const [ns, setNodes] = useState(nodes);
-    const [es, setEdges] = useState([]);
+    const [es, setEdges] = useState<OrdoEdge[]>([]);
     const history = useHistory({ nodes: ns, edges: es, setNodes, setEdges });
     Object.assign(view, { nodes: ns, setNodes }, history);
     return null;
@@ -42,28 +52,30 @@ function mount(t, nodes) {
   return view;
 }
 
-const fire = (target, type, init) =>
+const fire = (target: EventTarget, type: string, init: object) =>
   target.dispatchEvent(new window[type.startsWith("key") ? "KeyboardEvent" : "MouseEvent"](type, { bubbles: true, ...init }));
-const press = (target = document.body) => fire(target, "pointerdown", { button: 0 });
-const lift = (target = document.body) => fire(target, "pointerup", { button: 0 });
-const click = (target) => (press(target), lift(target));
-const key = (target, k) => fire(target, "keydown", { key: k });
+const press = (target: EventTarget = document.body) => fire(target, "pointerdown", { button: 0 });
+const lift = (target: EventTarget = document.body) => fire(target, "pointerup", { button: 0 });
+const click = (target?: EventTarget) => (press(target), lift(target));
+const key = (target: EventTarget, k?: string) => fire(target, "keydown", { key: k });
 
-const write = (view, fn) => act(() => view.setNodes(fn));
-const label = (view, id, text) =>
+const write = (view: View, fn: (nodes: OrdoNode[]) => OrdoNode[]) => act(() => view.setNodes(fn));
+const label = (view: View, id: string, text: string) =>
   write(view, (nds) =>
     nds.map((n) => (n.id === id ? { ...n, data: { ...n.data, label: text } } : n)),
   );
-const moveTo = (view, id, x) =>
+const moveTo = (view: View, id: string, x: number) =>
   write(view, (nds) =>
     nds.map((n) => (n.id === id ? { ...n, position: { x, y: 0 } } : n)),
   );
-const undo = (view) => act(() => view.undo());
-const redo = (view) => act(() => view.redo());
-const labelOf = (view, id) => view.nodes.find((n) => n.id === id).data.label;
-const xOf = (view, id) => view.nodes.find((n) => n.id === id).position.x;
+const undo = (view: View) => act(() => view.undo());
+const redo = (view: View) => act(() => view.redo());
+const labelOf = (view: View, id: string) =>
+  view.nodes.find((n) => n.id === id)!.data.label;
+const xOf = (view: View, id: string) =>
+  view.nodes.find((n) => n.id === id)!.position.x;
 
-const field = (tag, attrs = {}) => {
+const field = (tag: string, attrs = {}) => {
   const el = Object.assign(document.createElement(tag), attrs);
   document.body.append(el);
   return el;
@@ -180,7 +192,7 @@ test("the follower re-seating a rider after an undo does not cost the redo", (t)
   const view = mount(t, [
     { id: "r", type: "tube", position: { x: 0, y: 40 }, data: { attach: on } },
   ]);
-  const slide = (fn) =>
+  const slide = (fn: (node: OrdoNode) => OrdoNode) =>
     write(view, (nds) => nds.map((n) => (n.id === "r" ? fn(n) : n)));
 
   click();
@@ -188,16 +200,16 @@ test("the follower re-seating a rider after an undo does not cost the redo", (t)
   click();
 
   undo(view);
-  assert.equal(view.nodes[0].data.attach.t, 0.2);
+  assert.equal(view.nodes[0].data.attach?.t, 0.2);
   // what TubeFollower writes once the edge is drawn: position and tangent only
   slide((n) => ({
     ...n,
     position: { x: 3, y: 61 },
-    data: { attach: { ...n.data.attach, angle: 90.4 } },
+    data: { attach: { ...n.data.attach!, angle: 90.4 } },
   }));
 
   redo(view);
-  assert.equal(view.nodes[0].data.attach.t, 0.6);
+  assert.equal(view.nodes[0].data.attach?.t, 0.6);
 });
 
 test("text fields count as typing; selects, colour wells and the canvas do not", () => {

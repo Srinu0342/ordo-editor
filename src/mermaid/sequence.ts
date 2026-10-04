@@ -1,4 +1,4 @@
-import mermaid from "./mermaid.js";
+import mermaid from "./mermaid.ts";
 
 // Sequence import, part one: Mermaid's parse → a plain structural model.
 //
@@ -7,7 +7,7 @@ import mermaid from "./mermaid.js";
 // from a real render. A sequence diagram has no solver: its layout is two
 // running sums, columns across and rows down, and Mermaid's own numbers would
 // only carry Mermaid's fonts and padding into Ordo. So nothing here renders,
-// measures or touches the DOM; sequenceToOrdo.js does the arithmetic in Ordo's
+// measures or touches the DOM; sequenceToOrdo.ts does the arithmetic in Ordo's
 // own units.
 //
 // Everything comes from `db.state.records`, and three things about it are easy
@@ -24,10 +24,179 @@ import mermaid from "./mermaid.js";
 //      markers are the one consistent account of activation.
 
 // ---------------------------------------------------------------------------
+// What is read out of Mermaid
+// ---------------------------------------------------------------------------
+
+// Mermaid's sequence records, typed as this file reads them: the fields it
+// touches, as optional as it is careful about them. They are parse output, not
+// API — `state` is private on Mermaid's own SequenceDB type — and readSequence
+// checks their shape at runtime, so they are written down here rather than
+// imported.
+type SeqActor = {
+  name: string;
+  description?: string;
+  type?: string;
+  wrap?: boolean;
+  prevActor?: string;
+  nextActor?: string;
+};
+
+// An autonumber entry's `message` is its settings rather than text.
+type Autonumber = { start?: number; step?: number; visible?: boolean };
+
+type SeqMessage = {
+  type: number; // a LINETYPE value
+  from?: string;
+  to?: string;
+  message?: string | Autonumber;
+  wrap?: boolean;
+  placement?: number; // a PLACEMENT value
+  centralConnection?: number;
+};
+
+type SeqBox = { name?: string; fill?: string; actorKeys?: string[] };
+
+type SeqDb = {
+  state?: {
+    records?: {
+      actors: Map<string, SeqActor>;
+      messages: SeqMessage[];
+      boxes?: SeqBox[];
+      createdActors?: Map<string, number>;
+      destroyedActors?: Map<string, number>;
+    };
+  };
+  LINETYPE?: Record<string, number>;
+  PLACEMENT?: { LEFTOF: number; RIGHTOF: number; OVER: number };
+  getConfig?: () => { showSequenceNumbers?: boolean } | undefined;
+  getDiagramTitle?: () => string;
+};
+
+// ---------------------------------------------------------------------------
+// The model it is read into
+// ---------------------------------------------------------------------------
+
+export type SequenceActor = {
+  id: string;
+  label: string;
+  kind: string;
+  col: number;
+  box: number | null;
+  wrap: boolean;
+  created: number | null; // the stream index that creates it
+  destroyed: number | null; // …and the one that destroys it
+};
+
+export type SequenceBox = {
+  id: number;
+  label: string;
+  fill: string | null;
+  actors: string[];
+};
+
+export type Row = {
+  streamIdx: number;
+  rowIdx: number;
+  kind: "message" | "note";
+  msg: SeqMessage;
+};
+
+export type Span = {
+  id: number;
+  actor: string;
+  startRow: number;
+  endRow: number;
+  depth: number;
+  open: number;
+  close: number;
+};
+
+export type Fragment = {
+  id: number;
+  operator: string;
+  guards: string[];
+  fill?: string | null;
+  startRow: number | null;
+  endRow: number | null;
+  dividerRows: (number | null)[];
+  depth: number;
+  children: Fragment[];
+  open: number;
+  close: number | null;
+};
+
+export type MessageEntry = {
+  kind: "message";
+  streamIdx: number;
+  rowIdx: number;
+  from: string;
+  to: string;
+  self: boolean;
+  label: string;
+  number: number | null;
+  wrap: boolean;
+  dashed: boolean;
+  start: string;
+  end: string;
+  creates: boolean;
+  destroys: "from" | "to" | null;
+};
+
+export type NoteEntry = {
+  kind: "note";
+  streamIdx: number;
+  rowIdx: number;
+  from: string;
+  to: string;
+  placement: "left" | "right" | "over";
+  label: string;
+  wrap: boolean;
+};
+
+export type ActivateEntry = {
+  kind: "activate";
+  streamIdx: number;
+  actor: string;
+  span: number | null;
+};
+
+export type DeactivateEntry = {
+  kind: "deactivate";
+  streamIdx: number;
+  actor: string;
+  span: number;
+};
+
+// A fragment's markers: where it opens, each divider, where it closes.
+export type FrameEntry = {
+  kind: "open" | "mid" | "close";
+  streamIdx: number;
+  fragment: number;
+};
+
+export type Entry =
+  | MessageEntry
+  | NoteEntry
+  | ActivateEntry
+  | DeactivateEntry
+  | FrameEntry;
+
+export type SequenceModel = {
+  title: string | null;
+  actors: SequenceActor[];
+  boxes: SequenceBox[];
+  rows: Row[];
+  spans: Span[];
+  fragments: Fragment[];
+  entries: Entry[];
+  warnings: string[];
+};
+
+// ---------------------------------------------------------------------------
 // Text
 // ---------------------------------------------------------------------------
 
-const NAMED = {
+const NAMED: Record<string, string> = {
   amp: "&",
   lt: "<",
   gt: ">",
@@ -51,12 +220,12 @@ const NAMED = {
   check: "✓",
 };
 
-const fromCode = (code) =>
+const fromCode = (code: number) =>
   Number.isInteger(code) && code >= 0 && code <= 0x10ffff
     ? String.fromCodePoint(code)
     : "";
 
-const decodeEntity = (match, body) => {
+const decodeEntity = (match: string, body: string) => {
   if (body[0] !== "#") return NAMED[body.toLowerCase()] ?? match;
   const hex = body[1] === "x" || body[1] === "X";
   return fromCode(hex ? parseInt(body.slice(2), 16) : Number(body.slice(1))) || match;
@@ -69,7 +238,7 @@ const decodeEntity = (match, body) => {
  * line break, any other tag is dropped, and entities of either spelling are
  * decoded. Tags go first, so an escaped `#60;b#62;` survives as text.
  */
-export function cleanText(raw) {
+export function cleanText(raw: unknown) {
   if (raw == null || typeof raw === "object") return "";
   return String(raw)
     .replace(/<br\s*\/?>/gi, "\n")
@@ -87,7 +256,7 @@ export function cleanText(raw) {
 // The stream's vocabulary, by LINETYPE name
 // ---------------------------------------------------------------------------
 
-const OPEN = {
+const OPEN: Record<string, string> = {
   LOOP_START: "loop",
   ALT_START: "alt",
   OPT_START: "opt",
@@ -97,8 +266,12 @@ const OPEN = {
   BREAK_START: "break",
   RECT_START: "rect",
 };
-const MID = { ALT_ELSE: "alt", PAR_AND: "par", CRITICAL_OPTION: "critical" };
-const CLOSE = {
+const MID: Record<string, string> = {
+  ALT_ELSE: "alt",
+  PAR_AND: "par",
+  CRITICAL_OPTION: "critical",
+};
+const CLOSE: Record<string, string> = {
   LOOP_END: "loop",
   ALT_END: "alt",
   OPT_END: "opt",
@@ -126,10 +299,14 @@ const MARKERS = new Set([
 ]);
 
 // Arrow types → line and end markers, in the marker vocabulary of
-// edges/markers.jsx.
+// edges/markers.tsx.
 const FILLED = "arrow-filled";
 const OPEN_HEAD = "arrow";
-const ARROWS = {
+
+// Marker keys for either end, and whether the line is dashed.
+type Arrow = { start?: string; end?: string; dashed?: boolean };
+
+const ARROWS: Record<string, Arrow> = {
   SOLID: { end: FILLED },
   DOTTED: { end: FILLED, dashed: true },
   SOLID_CROSS: { end: "cross" },
@@ -146,18 +323,19 @@ const ARROWS = {
 // yet. Each is drawn with the whole head of its kind, at the end it points to.
 const HALF = /^(SOLID|STICK)(_ARROW)?_(TOP|BOTTOM)(_REVERSE)?(_DOTTED)?$/;
 
-const arrowOf = (name) => {
-  if (ARROWS[name]) return ARROWS[name];
+const arrowOf = (name: string | undefined): Arrow | null => {
+  if (name && ARROWS[name]) return ARROWS[name];
   const half = HALF.exec(name ?? "");
   if (!half) return null;
   const head = half[1] === "SOLID" ? FILLED : OPEN_HEAD;
-  return { [half[4] ? "start" : "end"]: head, dashed: Boolean(half[5]) };
+  const dashed = Boolean(half[5]);
+  return half[4] ? { start: head, dashed } : { end: head, dashed };
 };
 
 // ---------------------------------------------------------------------------
 
 /** Parse `src` and read it into the model. Throws on anything but a sequence diagram. */
-export async function getSequenceForOrdo(src) {
+export async function getSequenceForOrdo(src: string) {
   const diagram = await mermaid.mermaidAPI.getDiagramFromText(src);
   // `type`, not `diagramType`: that field belongs to parse()'s result, and on
   // a Diagram it is undefined.
@@ -183,8 +361,8 @@ export async function getSequenceForOrdo(src) {
  *
  * Row indices count arrows and notes only: markers never occupy a row.
  */
-export function readSequence(diagram) {
-  const { db } = diagram;
+export function readSequence(diagram: { db: unknown }): SequenceModel {
+  const db = diagram.db as SeqDb;
   const records = db?.state?.records;
 
   // Parse output, not a documented API. If an upgrade reshapes it, the import
@@ -195,21 +373,22 @@ export function readSequence(diagram) {
     );
   }
 
-  const NAME = {};
+  const NAME: Record<number, string> = {};
   for (const [name, value] of Object.entries(db.LINETYPE ?? {})) NAME[value] = name;
   const PLACE = db.PLACEMENT ?? { LEFTOF: 0, RIGHTOF: 1, OVER: 2 };
-  const placementOf = (value) =>
+  const placementOf = (value: number | undefined) =>
     value === PLACE.LEFTOF ? "left" : value === PLACE.RIGHTOF ? "right" : "over";
 
-  const warnings = [];
+  const warnings: string[] = [];
   const stream = records.messages;
 
   // --- columns --------------------------------------------------------------
   // Order comes from the prevActor/nextActor chain, not the Map's insertion
   // order. Anything the chain somehow misses still gets a column, at the end.
-  const byName = records.actors;
-  const chain = [];
-  const seen = new Set();
+  // Keyed to take a missing name too: an end of the chain is simply not found.
+  const byName: Map<string | undefined, SeqActor> = records.actors;
+  const chain: SeqActor[] = [];
+  const seen = new Set<string>();
   let at = [...byName.values()].find(
     (a) => a.prevActor === undefined || !byName.has(a.prevActor),
   );
@@ -224,10 +403,12 @@ export function readSequence(diagram) {
     chain.push(a);
   }
 
-  const created = records.createdActors ?? new Map();
-  const destroyed = records.destroyedActors ?? new Map();
+  const created: Map<string | undefined, number> =
+    records.createdActors ?? new Map();
+  const destroyed: Map<string | undefined, number> =
+    records.destroyedActors ?? new Map();
 
-  const actors = chain.map((a, col) => ({
+  const actors = chain.map((a, col): SequenceActor => ({
     id: a.name,
     label: cleanText(a.description ?? a.name),
     kind: a.type ?? "participant",
@@ -237,9 +418,11 @@ export function readSequence(diagram) {
     created: created.get(a.name) ?? null,
     destroyed: destroyed.get(a.name) ?? null,
   }));
-  const actorById = new Map(actors.map((a) => [a.id, a]));
+  const actorById = new Map<string | undefined, SequenceActor>(
+    actors.map((a) => [a.id, a]),
+  );
 
-  const boxes = (records.boxes ?? []).map((b, id) => ({
+  const boxes = (records.boxes ?? []).map((b, id): SequenceBox => ({
     id,
     label: cleanText(b.name ?? ""),
     fill: b.fill && b.fill !== "transparent" ? b.fill : null,
@@ -254,32 +437,32 @@ export function readSequence(diagram) {
   // --- pass 1: split the stream ---------------------------------------------
   // Markers do not occupy a row. If they consumed row indices, every diagram
   // would gain gaps Mermaid does not draw.
-  const kindOf = (msg) => {
+  const kindOf = (msg: SeqMessage) => {
     const name = NAME[msg.type];
     if (name === "NOTE") return "note";
     if (MARKERS.has(name)) return "marker";
     return actorById.has(msg.from) && actorById.has(msg.to) ? "message" : null;
   };
 
-  const rows = [];
-  const rowOf = new Array(stream.length).fill(null);
+  const rows: Row[] = [];
+  const rowOf = new Array<Row | null>(stream.length).fill(null);
   stream.forEach((msg, streamIdx) => {
     const kind = kindOf(msg);
     if (kind !== "note" && kind !== "message") return;
-    const row = { streamIdx, rowIdx: rows.length, kind, msg };
+    const row: Row = { streamIdx, rowIdx: rows.length, kind, msg };
     rows.push(row);
     rowOf[streamIdx] = row;
   });
 
   // The nearest row strictly before / after each stream index, as prefix
   // arrays — a marker's anchor is a lookup, not a search.
-  const before = new Array(stream.length).fill(null);
-  const after = new Array(stream.length).fill(null);
-  for (let i = 0, last = null; i < stream.length; i++) {
+  const before = new Array<Row | null>(stream.length).fill(null);
+  const after = new Array<Row | null>(stream.length).fill(null);
+  for (let i = 0, last: Row | null = null; i < stream.length; i++) {
     before[i] = last;
     if (rowOf[i]) last = rowOf[i];
   }
-  for (let i = stream.length - 1, next = null; i >= 0; i--) {
+  for (let i = stream.length - 1, next: Row | null = null; i >= 0; i--) {
     after[i] = next;
     if (rowOf[i]) next = rowOf[i];
   }
@@ -289,12 +472,15 @@ export function readSequence(diagram) {
   // independent of each other and may cross: an activation can open inside a
   // `par` operand and close after the `par` ends. Neither is scoped to the
   // other.
-  const entries = [];
-  const spans = [];
-  const stacks = new Map();
-  const fragments = [];
-  const frames = [];
-  const openFrames = [];
+  const entries: Entry[] = [];
+  const spans: Span[] = [];
+  const stacks = new Map<
+    string,
+    { startRow: number; depth: number; open: number; entry: ActivateEntry }[]
+  >();
+  const fragments: Fragment[] = [];
+  const frames: Fragment[] = [];
+  const openFrames: Fragment[] = [];
   let central = 0;
 
   // Mermaid numbers every arrow while autonumber is on, counting on through
@@ -305,7 +491,7 @@ export function readSequence(diagram) {
     visible: Boolean(db.getConfig?.()?.showSequenceNumbers),
   };
 
-  const closeFrame = (frame, streamIdx) => {
+  const closeFrame = (frame: Fragment, streamIdx: number) => {
     frame.close = streamIdx;
     frame.endRow =
       (streamIdx < stream.length ? before[streamIdx] : rows[rows.length - 1])
@@ -346,12 +532,13 @@ export function readSequence(diagram) {
             ? "to"
             : null;
 
+      // a message row's ends are both actors: that is what made it one
       entries.push({
         kind: "message",
         streamIdx: i,
         rowIdx: row.rowIdx,
-        from: msg.from,
-        to: msg.to,
+        from: msg.from!,
+        to: msg.to!,
         self: msg.from === msg.to,
         label: cleanText(msg.message),
         number,
@@ -370,8 +557,8 @@ export function readSequence(diagram) {
         kind: "note",
         streamIdx: i,
         rowIdx: row.rowIdx,
-        from: msg.from,
-        to: msg.to ?? msg.from,
+        from: msg.from!,
+        to: (msg.to ?? msg.from)!,
         placement: placementOf(msg.placement),
         label: cleanText(msg.message),
         wrap: Boolean(msg.wrap),
@@ -381,9 +568,14 @@ export function readSequence(diagram) {
 
     if (name === "ACTIVE_START") {
       // Markers carry `from`; `to` is always undefined. Keyed on `from`.
-      const actor = msg.from;
+      const actor = msg.from!;
       const stack = stacks.get(actor) ?? [];
-      const entry = { kind: "activate", streamIdx: i, actor, span: null };
+      const entry: ActivateEntry = {
+        kind: "activate",
+        streamIdx: i,
+        actor,
+        span: null,
+      };
       stack.push({
         // the nearest row BEFORE: the previous stream entry is often another marker
         startRow: before[i]?.rowIdx ?? 0,
@@ -397,7 +589,7 @@ export function readSequence(diagram) {
     }
 
     if (name === "ACTIVE_END") {
-      const actor = msg.from;
+      const actor = msg.from!;
       const opened = stacks.get(actor)?.pop();
       // Mermaid's own parser rejects this first; the check stays so that a
       // reshaped stream fails here, loudly, rather than as a misdrawn bar.
@@ -418,7 +610,7 @@ export function readSequence(diagram) {
     }
 
     if (name === "AUTONUMBER") {
-      const m = msg.message ?? {};
+      const m = (msg.message ?? {}) as Autonumber;
       numbering.index = m.start || numbering.index;
       numbering.step = m.step || numbering.step;
       numbering.visible = Boolean(m.visible);
@@ -428,7 +620,7 @@ export function readSequence(diagram) {
     if (OPEN[name]) {
       const operator = OPEN[name];
       const text = cleanText(msg.message);
-      const frame = {
+      const frame: Fragment = {
         id: frames.length,
         operator,
         // a `rect`'s "guard" is its colour
@@ -484,7 +676,7 @@ export function readSequence(diagram) {
     for (const opened of stack)
       warnings.push(`${actor} is activated at ${opened.open} and never deactivated; not drawn, as in Mermaid.`);
   while (openFrames.length) {
-    const frame = openFrames.pop();
+    const frame = openFrames.pop()!;
     warnings.push(`The ${frame.operator} opened at ${frame.open} never ends; closed at the end.`);
     closeFrame(frame, stream.length);
   }

@@ -1,8 +1,15 @@
 import { useCallback } from "react";
 import { BaseEdge, EdgeLabelRenderer, useReactFlow } from "@xyflow/react";
-import { route, ROUTE_KEYS } from "./routers.js";
-import { markerUrl } from "./markers.jsx";
-import EditableLabel from "../nodes/EditableLabel.jsx";
+import type { EdgeProps, EdgeTypes } from "@xyflow/react";
+import { route, ROUTE_KEYS } from "./routers.ts";
+import { markerUrl } from "./markers.tsx";
+import EditableLabel from "../nodes/EditableLabel.tsx";
+// Aliased: in this file `OrdoEdge` is the component.
+import type {
+  LabelPlacement,
+  OrdoEdge as OrdoEdgeType,
+  OrdoNode,
+} from "../types.ts";
 
 // One component, parameterised by routing. Everything else arrives as style or
 // data, which is why adding a marker or a dash pattern never adds a file.
@@ -12,7 +19,7 @@ import EditableLabel from "../nodes/EditableLabel.jsx";
 // so its label goes above; a self-message's router point is the far side of
 // its loop, so its label goes to the right, clear of the loop.
 const LABEL_GAP = 4;
-const PLACE = {
+const PLACE: Record<LabelPlacement, (x: number, y: number) => string> = {
   center: (x, y) => `translate(-50%, -50%) translate(${x}px, ${y}px)`,
   above: (x, y) => `translate(-50%, -100%) translate(${x}px, ${y - LABEL_GAP}px)`,
   right: (x, y) => `translate(0, -50%) translate(${x + LABEL_GAP}px, ${y}px)`,
@@ -29,7 +36,7 @@ function OrdoEdge({
   data,
   style,
   routeKey,
-}) {
+}: EdgeProps<OrdoEdgeType> & { routeKey: string }) {
   const [edgePath, labelX, labelY] = route(routeKey, {
     sourceX,
     sourceY,
@@ -39,9 +46,9 @@ function OrdoEdge({
     targetPosition,
   });
 
-  const { setEdges } = useReactFlow();
+  const { setEdges } = useReactFlow<OrdoNode, OrdoEdgeType>();
   const setLabel = useCallback(
-    (label) =>
+    (label: string) =>
       setEdges((eds) =>
         eds.map((e) =>
           e.id === id ? { ...e, data: { ...e.data, label } } : e,
@@ -55,7 +62,7 @@ function OrdoEdge({
   const ms = markerUrl(data?.markerStart);
   const me = markerUrl(data?.markerEnd);
   const label = data?.label ?? "";
-  const place = PLACE[data?.labelPlacement] ?? PLACE.center;
+  const place = PLACE[data?.labelPlacement ?? "center"] ?? PLACE.center;
 
   return (
     <>
@@ -96,8 +103,10 @@ function OrdoEdge({
 
 // React Flow resolves the component from edge.type, so each route gets a thin
 // bound wrapper rather than the edge carrying its router in data.
-export const edgeTypes = ROUTE_KEYS.reduce((acc, key) => {
-  const C = (props) => <OrdoEdge {...props} routeKey={key} />;
+export const edgeTypes = ROUTE_KEYS.reduce<EdgeTypes>((acc, key) => {
+  const C = (props: EdgeProps<OrdoEdgeType>) => (
+    <OrdoEdge {...props} routeKey={key} />
+  );
   C.displayName = `OrdoEdge(${key})`;
   acc[key] = C;
   return acc;

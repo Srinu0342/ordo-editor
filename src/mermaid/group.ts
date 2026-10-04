@@ -13,6 +13,8 @@
 // but these ride lifelines whose ends are in the same group, so the group and
 // the edge always agree on where a rider belongs.
 
+import type { Graph, NodeData, OrdoNode, Size, XY } from "../types.ts";
+
 const PAD = 24; // the diagram to the group's border
 const PAD_TOP = 32; // room under the title band
 
@@ -30,7 +32,10 @@ const UNTITLED = /^mermaid(\d+)$/i;
  * numbered on from the highest `mermaidN` already on the canvas — so a
  * deleted group's number is never handed out again while a later one exists.
  */
-export function diagramName(title, nodes = []) {
+export function diagramName(
+  title: string | null | undefined,
+  nodes: Pick<OrdoNode, "data">[] = [],
+) {
   const named = String(title ?? "").trim();
   if (named) return named;
 
@@ -43,14 +48,14 @@ export function diagramName(title, nodes = []) {
 }
 
 /** A group id nothing on the canvas is using. */
-export function groupId(nodes = []) {
+export function groupId(nodes: Pick<OrdoNode, "id">[] = []) {
   const taken = new Set(nodes.map((n) => n.id));
   let k = 1;
   while (taken.has(`mermaid-${k}`)) k += 1;
   return `mermaid-${k}`;
 }
 
-const sizeOf = (n) => [
+const sizeOf = (n: OrdoNode): Size => [
   n.style?.width ?? n.width ?? 0,
   n.style?.height ?? n.height ?? 0,
 ];
@@ -61,10 +66,15 @@ const sizeOf = (n) => [
  *          Flow wants a parent before its children.
  */
 export function groupDiagram(
-  { nodes, edges },
-  { id, label, at = { x: 0, y: 0 }, data = {} },
-) {
-  const ns = (key) => `${id}/${key}`;
+  { nodes, edges }: Graph,
+  {
+    id,
+    label,
+    at = { x: 0, y: 0 },
+    data = {},
+  }: { id: string; label: string; at?: XY; data?: NodeData },
+): Graph & { group: OrdoNode } {
+  const ns = (key: string) => `${id}/${key}`;
 
   // Top-level nodes are enough for the bounds: a subgraph's children lie inside it.
   let x1 = Infinity;
@@ -84,7 +94,7 @@ export function groupDiagram(
   // The group's corner, in the diagram's own coordinates.
   const corner = { x: x1 - PAD, y: y1 - PAD_TOP };
 
-  const group = {
+  const group: OrdoNode = {
     id,
     type: "container",
     position: { x: at.x, y: at.y },
@@ -94,7 +104,7 @@ export function groupDiagram(
   };
 
   const inner = nodes.map((n) => {
-    const out = { ...n, id: ns(n.id) };
+    const out: OrdoNode = { ...n, id: ns(n.id) };
     if (n.parentId) {
       out.parentId = ns(n.parentId);
     } else {

@@ -1,15 +1,33 @@
 import { useCallback, useState } from "react";
+import type { CSSProperties } from "react";
 
 // Double-click to edit, borderless while editing. The hidden sizer span is what
 // keeps the input exactly as wide as its text — a bare <input> carries an
 // intrinsic ~20ch width that would balloon any shrink-to-fit node.
-export default function EditableLabel({ value, onChange, style, placeholder }) {
+export default function EditableLabel({
+  value,
+  onChange,
+  style,
+  placeholder,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  style?: CSSProperties;
+  placeholder?: string;
+}) {
   const [editing, setEditing] = useState(false);
-  const focusOnMount = useCallback((el) => el?.focus(), []);
+  const focusOnMount = useCallback(
+    (el: HTMLInputElement | null) => el?.focus(),
+    [],
+  );
 
   // Both modes render into the same grid cell with the same metrics, so
   // entering edit mode can't shift the layout. paddingRight is caret room.
-  const cell = { gridArea: "1 / 1", whiteSpace: "pre", paddingRight: 2 };
+  const cell: CSSProperties = {
+    gridArea: "1 / 1",
+    whiteSpace: "pre",
+    paddingRight: 2,
+  };
   const shown = value || "";
 
   return (

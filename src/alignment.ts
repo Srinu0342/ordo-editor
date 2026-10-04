@@ -5,6 +5,13 @@
 // nudge the box and which guide lines to draw. The drag pipeline in App applies
 // the nudge; the overlay draws the lines.
 
+import type { Rect } from "./types.ts";
+
+type Axis = "x" | "y";
+
+// A line to draw: at `at` on `axis`, running `from` → `to` across it.
+export type Guide = { axis: Axis; at: number; from: number; to: number };
+
 // Reach of the pull, in SCREEN pixels. Divided by the zoom before use, so the
 // pull feels the same whether you are zoomed in on a detail or out on a map.
 export const GUIDE_SNAP_PX = 6;
@@ -15,20 +22,25 @@ export const GUIDE_SNAP_PX = 6;
 const EPS = 0.5;
 
 // Left/centre/right (or top/middle/bottom) — the three lines a box offers.
-const anchors = (r, axis) =>
+const anchors = (r: Rect, axis: Axis) =>
   axis === "x"
     ? [r.x, r.x + r.width / 2, r.x + r.width]
     : [r.y, r.y + r.height / 2, r.y + r.height];
 
 // The cross-axis extent of a box: a vertical guide spans boxes top to bottom.
-const span = (r, axis) =>
+const span = (r: Rect, axis: Axis) =>
   axis === "x" ? [r.y, r.y + r.height] : [r.x, r.x + r.width];
 
 // Smallest correction that brings one of `rect`'s anchors onto one of the
 // others', or 0 when nothing is within reach.
-const snapAxis = (rect, others, axis, threshold) => {
+const snapAxis = (
+  rect: Rect,
+  others: Rect[],
+  axis: Axis,
+  threshold: number,
+) => {
   const mine = anchors(rect, axis);
-  let best = null;
+  let best: number | null = null;
 
   for (const o of others) {
     for (const theirs of anchors(o, axis)) {
@@ -44,8 +56,8 @@ const snapAxis = (rect, others, axis, threshold) => {
 
 // Every line the snapped box now shares with another, each drawn from the far
 // end of one box to the far end of the other so it reads as "these two".
-const guidesFor = (rect, others, axis) => {
-  const lines = new Map();
+const guidesFor = (rect: Rect, others: Rect[], axis: Axis) => {
+  const lines = new Map<number, Guide>();
 
   for (const at of anchors(rect, axis)) {
     for (const o of others) {
@@ -69,7 +81,7 @@ const guidesFor = (rect, others, axis) => {
 // `rect` is the moving box (a multi-selection moves as its union, so it lines
 // up as one thing). Returns the nudge and the guides to draw once it is
 // applied. Axes are independent: a box can snap across and float down.
-export function alignRect(rect, others, threshold) {
+export function alignRect(rect: Rect, others: Rect[], threshold: number) {
   const dx = snapAxis(rect, others, "x", threshold);
   const dy = snapAxis(rect, others, "y", threshold);
   const snapped = { ...rect, x: rect.x + dx, y: rect.y + dy };

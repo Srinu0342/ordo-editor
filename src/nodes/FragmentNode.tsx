@@ -1,13 +1,15 @@
 import { useCallback, useMemo } from "react";
+import type { CSSProperties } from "react";
 import {
   NodeResizer,
   NodeToolbar,
   Position,
   useReactFlow,
 } from "@xyflow/react";
-import { labelBox, walk } from "../render/reactWalker.jsx";
-import EditableLabel from "./EditableLabel.jsx";
-import { nodeTheme } from "./chrome.jsx";
+import type { NodeProps } from "@xyflow/react";
+import { labelBox, walk } from "../render/reactWalker.tsx";
+import EditableLabel from "./EditableLabel.tsx";
+import { nodeTheme } from "./chrome.tsx";
 import {
   TAB_H,
   drawFragment,
@@ -15,9 +17,10 @@ import {
   isPlain,
   stepOperands,
   tabWidth,
-} from "./fragment.js";
+} from "./fragment.ts";
+import type { NodeData, OrdoEdge, OrdoNode } from "../types.ts";
 
-// The combined-fragment frame. The drawing is fragment.js's op-list; this adds
+// The combined-fragment frame. The drawing is fragment.ts's op-list; this adds
 // the chrome — resizer, operand stepper, editable labels — and the hit area.
 //
 // The node's own box ignores the pointer (see NODE_TYPE_DEFAULTS): only the
@@ -28,7 +31,7 @@ import {
 // How far either side of the border still counts as the border.
 const HIT = 10;
 
-const chip = {
+const chip: CSSProperties = {
   font: "inherit",
   fontSize: 11,
   lineHeight: 1,
@@ -40,8 +43,14 @@ const chip = {
   color: "#475569",
 };
 
-export default function FragmentNode({ id, data, selected, width, height }) {
-  const { setNodes } = useReactFlow();
+export default function FragmentNode({
+  id,
+  data,
+  selected,
+  width,
+  height,
+}: NodeProps<OrdoNode>) {
+  const { setNodes } = useReactFlow<OrdoNode, OrdoEdge>();
   const w = Math.max(1, width ?? 320);
   const h = Math.max(1, height ?? 180);
   const operator = data.operator ?? "";
@@ -54,7 +63,7 @@ export default function FragmentNode({ id, data, selected, width, height }) {
   );
 
   const patch = useCallback(
-    (fn) =>
+    (fn: (data: NodeData) => NodeData) =>
       setNodes((nds) =>
         nds.map((nd) => (nd.id === id ? { ...nd, data: fn(nd.data) } : nd)),
       ),
@@ -62,7 +71,7 @@ export default function FragmentNode({ id, data, selected, width, height }) {
   );
 
   const setSlot = useCallback(
-    (slot, value) =>
+    (slot: string, value: string) =>
       patch((d) => {
         if (slot === "operator") return { ...d, operator: value };
         const guards = [...(d.guards ?? [])];
@@ -72,7 +81,7 @@ export default function FragmentNode({ id, data, selected, width, height }) {
     [patch],
   );
 
-  const valueOf = (slot) =>
+  const valueOf = (slot: string) =>
     slot === "operator" ? operator : (data.guards?.[guardIndex(slot)] ?? "");
 
   return (

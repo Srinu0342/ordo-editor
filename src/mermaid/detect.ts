@@ -1,4 +1,4 @@
-import mermaid from "./mermaid.js";
+import mermaid from "./mermaid.ts";
 
 // What a piece of Mermaid text IS, decided before anything is drawn.
 //
@@ -10,7 +10,9 @@ import mermaid from "./mermaid.js";
 
 // detectType's answer → the importer for it. `graph` and `flowchart` both come
 // back as flowchart-v2; the other two are the older and the ELK spellings.
-const FAMILY = {
+export type Family = "flowchart" | "sequence";
+
+const FAMILY: Record<string, Family> = {
   flowchart: "flowchart",
   "flowchart-v2": "flowchart",
   "flowchart-elk": "flowchart",
@@ -22,7 +24,7 @@ const FAMILY = {
 export const IMPORTABLE = "Ordo imports flowcharts and sequence diagrams so far.";
 
 // For saying what was found, including the kinds with no importer yet.
-const NAMES = {
+const NAMES: Record<string, string> = {
   flowchart: "Flowchart",
   sequence: "Sequence diagram",
   class: "Class diagram",
@@ -54,7 +56,7 @@ const NAMES = {
 const FENCE =
   /^[ \t]*(`{3,}|~{3,})[ \t]*mermaid\b[^\n]*\n([\s\S]*?)^[ \t]*\1[ \t]*$/gm;
 
-export function mermaidSource(text) {
+export function mermaidSource(text: string) {
   const raw = String(text ?? "");
   FENCE.lastIndex = 0;
   const blocks = [...raw.matchAll(FENCE)];
@@ -69,7 +71,7 @@ export function mermaidSource(text) {
 const FRONT = /^\s*---[ \t]*\n([\s\S]*?)\n[ \t]*---[ \t]*(?:\n|$)/;
 const TITLE = /^[ \t]*title[ \t]*:[ \t]*(.*?)[ \t]*$/m;
 
-export function frontMatterTitle(source) {
+export function frontMatterTitle(source: string) {
   const block = FRONT.exec(String(source ?? ""))?.[1];
   const raw = block ? TITLE.exec(block)?.[1] : null;
   return raw ? raw.replace(/^(["'])(.*)\1$/, "$2").trim() || null : null;
@@ -85,22 +87,32 @@ export function frontMatterTitle(source) {
  * it had one; `blocks` counts the fences. `title` is the front-matter title,
  * when there is one.
  */
-export function detectDiagram(text) {
+export type Detected = {
+  family: Family | null;
+  type: string | null;
+  name: string | null;
+  source: string;
+  blocks: number;
+  title: string | null;
+  label: string;
+};
+
+export function detectDiagram(text: string): Detected {
   const { source, blocks } = mermaidSource(text);
   const title = frontMatterTitle(source);
   if (!source.trim())
     return { family: null, type: null, name: null, source, blocks, title, label: "Nothing to import" };
 
-  let type = null;
+  let type: string | null = null;
   try {
     type = mermaid.detectType(source);
   } catch {
     // UnknownDiagramError: nothing Mermaid recognises
   }
 
-  const family = FAMILY[type] ?? null;
-  const name = NAMES[family ?? type] ?? type;
-  const label = !type
+  const family = type ? (FAMILY[type] ?? null) : null;
+  const name = type && (NAMES[family ?? type] ?? type);
+  const label = !name
     ? "Not a Mermaid diagram"
     : family
       ? name

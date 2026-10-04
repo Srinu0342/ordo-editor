@@ -8,6 +8,13 @@ import { toast } from "react-toastify";
 // cannot be yet — and `onImport` converts it. The dialog closes once the import
 // has landed; if it fails, the reason stays on screen and so does the text.
 
+// What `describe` says about the text in the box.
+export type ImportDescription = {
+  ok: boolean;
+  label: string;
+  warning: string | null;
+};
+
 const ACCEPT = ".mmd,.mermaid,.md,.txt";
 
 const PLACEHOLDER = `flowchart TD
@@ -15,14 +22,24 @@ const PLACEHOLDER = `flowchart TD
   B -- yes --> C[Ship it]
   B -- no --> A`;
 
-export default function ImportDialog({ open, onClose, onImport, describe }) {
+export default function ImportDialog({
+  open,
+  onClose,
+  onImport,
+  describe,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onImport: (source: string, meta: { fileName: string }) => Promise<void>;
+  describe?: (text: string) => ImportDescription;
+}) {
   const [text, setText] = useState("");
   const [dragging, setDragging] = useState(false);
   const [fileName, setFileName] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const fileRef = useRef(null);
-  const areaRef = useRef(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const areaRef = useRef<HTMLTextAreaElement>(null);
 
   // Fresh sheet every time it opens, and the caret is already in the box. The
   // sheet is cleared as the dialog CLOSES: cleared on opening, the first render
@@ -58,7 +75,7 @@ export default function ImportDialog({ open, onClose, onImport, describe }) {
     return () => toast.dismiss(warning);
   }, [warning]);
 
-  const readFile = useCallback((file) => {
+  const readFile = useCallback((file: File | undefined) => {
     if (!file) return;
     const reader = new FileReader();
     reader.onerror = () => setError(`Could not read ${file.name}.`);
@@ -91,7 +108,9 @@ export default function ImportDialog({ open, onClose, onImport, describe }) {
       await onImport(source, { fileName });
       onClose();
     } catch (err) {
-      setError(err?.message || "The import failed.");
+      setError(
+        (err as { message?: string } | null)?.message || "The import failed.",
+      );
     } finally {
       setBusy(false);
     }

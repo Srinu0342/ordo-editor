@@ -1,17 +1,25 @@
 import { useCallback, useMemo } from "react";
 import { useReactFlow, NodeResizer } from "@xyflow/react";
-import { drawShape, defaultSize, DEFAULT_SHAPE } from "../shapes/registry.js";
-import { walk, labelBox } from "../render/reactWalker.jsx";
-import EditableLabel from "./EditableLabel.jsx";
-import { Anchors, nodeTheme } from "./chrome.jsx";
+import type { NodeProps } from "@xyflow/react";
+import { drawShape, defaultSize, DEFAULT_SHAPE } from "../shapes/registry.ts";
+import { walk, labelBox } from "../render/reactWalker.tsx";
+import EditableLabel from "./EditableLabel.tsx";
+import { Anchors, nodeTheme } from "./chrome.tsx";
+import type { OrdoEdge, OrdoNode } from "../types.ts";
 
 // ONE component for all 47 shapes. The shape is a property, the geometry comes
 // from the registry, and the drawing comes from the shared walker — so adding
 // a shape never touches this file. That is the entire argument of the
 // organising cut, in about sixty lines.
 
-export default function BoxNode({ id, data, selected, width, height }) {
-  const { setNodes } = useReactFlow();
+export default function BoxNode({
+  id,
+  data,
+  selected,
+  width,
+  height,
+}: NodeProps<OrdoNode>) {
+  const { setNodes } = useReactFlow<OrdoNode, OrdoEdge>();
   const shape = data.shape ?? DEFAULT_SHAPE;
 
   // Measured size wins; the registry default covers the first frame before
@@ -27,7 +35,7 @@ export default function BoxNode({ id, data, selected, width, height }) {
   );
 
   const setSlot = useCallback(
-    (slot, value) =>
+    (slot: string, value: string) =>
       setNodes((nds) =>
         nds.map((nd) =>
           nd.id === id ? { ...nd, data: { ...nd.data, [slot]: value } } : nd,
@@ -57,7 +65,7 @@ export default function BoxNode({ id, data, selected, width, height }) {
         {labels.map((slot) => (
           <div key={slot.key} style={labelBox(slot, w, h, theme)}>
             <EditableLabel
-              value={data[slot.slot] ?? ""}
+              value={String(data[slot.slot] ?? "")}
               onChange={(v) => setSlot(slot.slot, v)}
               placeholder="label"
               style={{ textAlign: slot.align }}

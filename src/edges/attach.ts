@@ -11,20 +11,33 @@
 // Path coordinates are flow coordinates (the viewport transform sits on an
 // ancestor <g>), so nothing has to be converted.
 
+import type { OrdoEdge, XY } from "../types.ts";
+
+// A point on a path: its fraction along, where it is, and how far it lies
+// from the point it was nearest to.
+export type PathHit = { t: number; x: number; y: number; dist: number };
+
+// The same, on a named edge, with the tangent there.
+export type EdgeHit = PathHit & {
+  edgeId: string;
+  el: SVGPathElement;
+  angle?: number;
+};
+
 // How close the pointer has to be to an edge for a drop to stick, and how far
 // you have to pull before a rider lets go. The gap between them is hysteresis:
 // without it a rider sitting exactly on its edge would flicker between states.
 export const SNAP_DIST = 28;
 export const DETACH_DIST = 46;
 
-const clamp01 = (v) => Math.min(1, Math.max(0, v));
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
-export const edgePathEl = (edgeId) =>
-  document.querySelector(
+export const edgePathEl = (edgeId: string) =>
+  document.querySelector<SVGPathElement>(
     `.react-flow__edge[data-id="${CSS.escape(String(edgeId))}"] path.react-flow__edge-path`,
   );
 
-const lengthOf = (el) => {
+const lengthOf = (el: SVGPathElement | null) => {
   try {
     return el?.getTotalLength?.() ?? 0;
   } catch {
@@ -33,9 +46,9 @@ const lengthOf = (el) => {
 };
 
 /** Point and tangent at fraction `t`, in flow coordinates. */
-export function pointAt(el, t) {
+export function pointAt(el: SVGPathElement | null, t: number) {
   const total = lengthOf(el);
-  if (!total) return null;
+  if (!el || !total) return null;
 
   const at = clamp01(t) * total;
   const p = el.getPointAtLength(at);
@@ -57,14 +70,18 @@ export function pointAt(el, t) {
  * around the winner. Sub-pixel on any length of path for ~50 samples, and
  * immune to the local minima a pure binary search falls into on an S-curve.
  */
-export function nearestOnPath(el, point) {
+export function nearestOnPath(
+  el: SVGPathElement | null,
+  point: XY,
+): PathHit | null {
   const total = lengthOf(el);
-  if (!total) return null;
+  if (!el || !total) return null;
 
   let lo = 0;
   let hi = 1;
   let steps = Math.min(96, Math.max(16, Math.round(total / 8)));
-  let best = null;
+  // taken by the very first sample: every sweep has at least eight
+  let best!: { t: number; d: number; x: number; y: number };
 
   for (let pass = 0; pass < 3; pass++) {
     for (let i = 0; i <= steps; i++) {
@@ -87,8 +104,13 @@ export function nearestOnPath(el, point) {
  * edges it is itself an endpoint of — those move WITH it, and an edge chasing
  * the node that is chasing it never settles.
  */
-export function nearestEdge(edges, point, maxDist = SNAP_DIST, skipIds) {
-  let best = null;
+export function nearestEdge(
+  edges: OrdoEdge[],
+  point: XY,
+  maxDist = SNAP_DIST,
+  skipIds?: Set<string>,
+): EdgeHit | null {
+  let best: EdgeHit | null = null;
 
   for (const edge of edges) {
     if (skipIds?.has(edge.id)) continue;
@@ -108,7 +130,7 @@ export function nearestEdge(edges, point, maxDist = SNAP_DIST, skipIds) {
 }
 
 /** Edges that would move if `nodeIds` moved. */
-export const edgesTouching = (edges, nodeIds) =>
+export const edgesTouching = (edges: OrdoEdge[], nodeIds: Set<string>) =>
   new Set(
     edges
       .filter((e) => nodeIds.has(e.source) || nodeIds.has(e.target))

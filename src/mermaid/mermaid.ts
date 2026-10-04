@@ -8,7 +8,7 @@ import mermaid from "mermaid";
 // that are parse output rather than documented API.
 
 mermaid.registerLayoutLoaders([
-  { name: "ordo", loader: async () => await import("./ordo-layout.js") },
+  { name: "ordo", loader: async () => await import("./ordo-layout.ts") },
 ]);
 
 mermaid.initialize({

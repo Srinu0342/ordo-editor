@@ -4,10 +4,15 @@
 // on a server, in CI, and in a git hook without a browser — the environment
 // constraint that WS4's harvest-vs-relayout decision turns on.
 
-import { OP } from "../ops.js";
-import { LIGHT, resolve } from "../theme.js";
+import { OP } from "../ops.ts";
+import type { Op, Paint } from "../ops.ts";
+import { LIGHT, resolve } from "../theme.ts";
+import type { Theme } from "../theme.ts";
 
-const esc = (s) =>
+// Slot name → the text drawn in it.
+type Text = Record<string, string>;
+
+const esc = (s: unknown) =>
   String(s)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -16,8 +21,8 @@ const esc = (s) =>
 
 // Emitted only when set, so the output stays diffable and does not carry a
 // wall of default attributes on every mark.
-const attrs = (o) => {
-  const out = [];
+const attrs = (o: Record<string, unknown>) => {
+  const out: string[] = [];
   for (const [k, v] of Object.entries(o)) {
     if (v === undefined || v === null || v === "") continue;
     out.push(`${k}="${esc(v)}"`);
@@ -25,7 +30,7 @@ const attrs = (o) => {
   return out.join(" ");
 };
 
-const paint = (theme, o) => ({
+const paint = (theme: Theme, o: Paint) => ({
   fill: resolve(theme, o.fill ?? "none"),
   stroke: resolve(theme, o.stroke ?? "none"),
   "stroke-width": o.stroke && o.stroke !== "none" ? o.width : undefined,
@@ -36,7 +41,7 @@ const paint = (theme, o) => ({
 
 const ANCHOR = { left: "start", center: "middle", right: "end" };
 
-function one(op, theme, text) {
+function one(op: Op, theme: Theme, text: Text): string {
   switch (op.op) {
     case OP.RECT:
       return `<rect ${attrs({ x: op.x, y: op.y, width: op.w, height: op.h, rx: op.rx || undefined, ...paint(theme, op) })}/>`;
@@ -75,13 +80,22 @@ function one(op, theme, text) {
 
 // `text` maps slot name -> string, so the same op-list renders with whatever
 // content the document carries rather than baking content into geometry.
-export function opsToSvgBody(ops, { theme = LIGHT, text = {} } = {}) {
+export function opsToSvgBody(
+  ops: Op[],
+  { theme = LIGHT, text = {} }: { theme?: Theme; text?: Text } = {},
+) {
   return ops.map((o) => one(o, theme, text)).join("");
 }
 
 export function opsToSvg(
-  ops,
-  { width, height, theme = LIGHT, text = {}, pad = 0 } = {},
+  ops: Op[],
+  {
+    width,
+    height,
+    theme = LIGHT,
+    text = {},
+    pad = 0,
+  }: { width: number; height: number; theme?: Theme; text?: Text; pad?: number },
 ) {
   const vb = `${-pad} ${-pad} ${width + pad * 2} ${height + pad * 2}`;
   return (
@@ -93,5 +107,5 @@ export function opsToSvg(
 
 // Data URI for an <img src>, which is how the palette shows previews without
 // mounting a React tree per swatch.
-export const svgDataUri = (svg) =>
+export const svgDataUri = (svg: string) =>
   `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;

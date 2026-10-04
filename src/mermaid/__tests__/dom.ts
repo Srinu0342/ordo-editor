@@ -1,4 +1,4 @@
-// TEST-ONLY. Nothing outside __tests__ may import this; production.test.js
+// TEST-ONLY. Nothing outside __tests__ may import this; production.test.ts
 // checks that nothing does.
 //
 // Mermaid's sequence parser reaches for a DOM in a few places a browser always
@@ -9,16 +9,20 @@ import { JSDOM } from "jsdom";
 
 export const dom = new JSDOM("<!DOCTYPE html><html><body></body></html>");
 
-globalThis.window = dom.window;
-globalThis.document = dom.window.document;
-globalThis.Option = dom.window.Option;
-globalThis.CSSStyleSheet = dom.window.CSSStyleSheet;
+Object.assign(globalThis, {
+  window: dom.window,
+  document: dom.window.document,
+  Option: dom.window.Option,
+  CSSStyleSheet: dom.window.CSSStyleSheet,
+});
 
 // jsdom implements the DOM but no SVG geometry. Only the oracle needs this —
 // it runs Mermaid's real renderer, which measures every label.
 export function shimTextGeometry() {
-  dom.window.SVGElement.prototype.getBBox = function () {
-    const text = this.textContent ?? "";
-    return { x: 0, y: 0, width: text.length * 8, height: 20 };
-  };
+  Object.assign(dom.window.SVGElement.prototype, {
+    getBBox(this: SVGElement) {
+      const text = this.textContent ?? "";
+      return { x: 0, y: 0, width: text.length * 8, height: 20 };
+    },
+  });
 }

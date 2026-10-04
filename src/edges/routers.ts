@@ -3,6 +3,24 @@ import {
   getSmoothStepPath,
   getBezierPath,
 } from "@xyflow/react";
+import type { Position } from "@xyflow/react";
+
+// Both ends of an edge, as React Flow hands them to an edge component.
+export type RouteParams = {
+  sourceX: number;
+  sourceY: number;
+  sourcePosition: Position;
+  targetX: number;
+  targetY: number;
+  targetPosition: Position;
+};
+
+type RouteDef = {
+  label: string;
+  hint: string;
+  // [path, labelX, labelY, offsetX, offsetY], as every React Flow router returns
+  run: (p: RouteParams) => ReturnType<typeof getStraightPath>;
+};
 
 // Routing is the ONLY structural axis an edge has. Dash, width, colour, the
 // markers at each end and the label are all theme properties resolved at draw
@@ -10,7 +28,7 @@ import {
 // variant, and the same cut that keeps Box at one component keeps these at
 // three.
 
-export const ROUTES = {
+export const ROUTES: Record<string, RouteDef> = {
   straight: {
     label: "Straight",
     hint: "Point to point, no bend",
@@ -38,5 +56,5 @@ export const DEFAULT_ROUTE = "step";
 
 // getStraightPath ignores the Position fields but takes the same object, so
 // every router shares one call signature and the edge component never branches.
-export const route = (key, params) =>
+export const route = (key: string, params: RouteParams) =>
   (ROUTES[key] ?? ROUTES[DEFAULT_ROUTE]).run(params);

@@ -1,30 +1,31 @@
-import { rect, rule } from "../ops.js";
+import { rect, rule } from "../ops.ts";
+import type { NodeData, Size } from "../types.ts";
 
 // The tube's model and drawing, without React — so an importer can lay tubes
 // out, and a headless renderer can draw them, without loading the component.
 //
 // What a tube is FOR: on a sequence diagram it is an activation bar riding a
 // lifeline. The lifeline is an edge, the tube rides it at a fraction `t` (see
-// edges/attach.js and TubeFollower.jsx), and messages run tap to tap between
+// edges/attach.ts and TubeFollower.tsx), and messages run tap to tap between
 // tubes. Everything below is in service of that reading.
 
 export const TUBE_TYPE = "tube";
 
 // Thickness × length. Vertical is the natural pose, so length is the height.
-export const TUBE_SIZE = [26, 220];
+export const TUBE_SIZE: Size = [26, 220];
 
 // A track is a tube that draws nothing. The importer rides one along each
 // lifeline from end to end to carry the taps for messages that land outside
 // every activation: the lifeline edge already draws the line, and a bar there
 // would read as "active the whole time".
 export const TRACK = "track";
-export const isTrack = (data) => data?.variant === TRACK;
+export const isTrack = (data?: NodeData) => data?.variant === TRACK;
 
 const DEFAULT_SLOTS = 3;
 const MIN_SLOTS = 1;
 const MAX_SLOTS = 32;
 
-export const slotCount = (data) =>
+export const slotCount = (data?: NodeData) =>
   Math.min(
     MAX_SLOTS,
     Math.max(MIN_SLOTS, Math.round(data?.slots ?? DEFAULT_SLOTS)),
@@ -33,20 +34,22 @@ export const slotCount = (data) =>
 // Slot i's position along the tube, as a fraction of its length. Centred in its
 // share rather than spread end to end, so the first and last taps sit clear of
 // the caps instead of on top of them.
-export const slotAt = (i, n) => (i + 0.5) / n;
+export const slotAt = (i: number, n: number) => (i + 0.5) / n;
 
 // Two ways to say where the taps are. `slots` spreads them evenly, which is all
 // a tube drawn by hand needs. `taps` pins each one at a distance from the head,
 // in px — what an importer lays down, so that both ends of a message share one
 // y however unevenly the rows fall. When `taps` is present it wins, even empty:
 // an activation no message touches has no taps, not three.
-export const hasTaps = (data) => Array.isArray(data?.taps);
+export const hasTaps = (
+  data?: NodeData,
+): data is NodeData & { taps: number[] } => Array.isArray(data?.taps);
 
-export const tapCount = (data) =>
+export const tapCount = (data?: NodeData) =>
   hasTaps(data) ? data.taps.length : slotCount(data);
 
 /** Each tap's distance from the head, in px, on a tube `h` long. */
-export const tapOffsets = (data, h) => {
+export const tapOffsets = (data: NodeData | undefined, h: number) => {
   if (hasTaps(data)) return data.taps;
   const n = slotCount(data);
   return Array.from({ length: n }, (_, i) => slotAt(i, n) * h);
@@ -55,7 +58,7 @@ export const tapOffsets = (data, h) => {
 // CSS `top` for tap i's handles. A percentage for slots, so they track a resize
 // exactly as the tick marks do; px for pinned taps, which stay where the rows
 // are.
-export const tapTop = (data, i) =>
+export const tapTop = (data: NodeData | undefined, i: number) =>
   hasTaps(data)
     ? `${data.taps[i]}px`
     : `${slotAt(i, slotCount(data)) * 100}%`;
@@ -65,7 +68,7 @@ export const tapTop = (data, i) =>
  * between the last tap and the tail — the open stretch a new message would go
  * to — and removed from the end, which is the newest.
  */
-export function stepTaps(data, delta, h) {
+export function stepTaps(data: NodeData, delta: number, h: number): NodeData {
   if (!hasTaps(data)) return { ...data, slots: slotCount(data) + delta };
 
   const taps = [...data.taps];
@@ -80,7 +83,7 @@ export function stepTaps(data, delta, h) {
 
 // The tick marks and the handles both come from tapOffsets, so a tap can never
 // drift away from the mark drawn under it.
-export const drawTube = (w, h, data) =>
+export const drawTube = (w: number, h: number, data?: NodeData) =>
   isTrack(data)
     ? []
     : [

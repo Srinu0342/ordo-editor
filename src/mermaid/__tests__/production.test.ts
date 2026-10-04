@@ -9,18 +9,18 @@ import { fileURLToPath } from "node:url";
 
 const SRC = fileURLToPath(new URL("../../", import.meta.url));
 
-const sources = (dir) =>
+const sources = (dir: string): string[] =>
   readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) return entry.name === "__tests__" ? [] : sources(path);
-    return /\.(js|jsx|mjs)$/.test(entry.name) ? [path] : [];
+    return /\.(ts|tsx|js|jsx|mjs)$/.test(entry.name) ? [path] : [];
   });
 
 // Code, not prose: a comment saying "no jsdom" is the point, not a breach.
-const imports = (what) =>
+const imports = (what: string) =>
   new RegExp(`(from\\s*|import\\s*\\(\\s*|require\\s*\\(\\s*)["'][^"']*${what}`);
 
-const FORBIDDEN = [
+const FORBIDDEN: [pattern: RegExp, what: string][] = [
   [imports("jsdom"), "an import of jsdom"],
   [/getBBox\s*=/, "a getBBox shim"],
   [/\brenderer\s*\.\s*bounds\b/, "renderer.bounds"],

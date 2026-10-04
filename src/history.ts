@@ -17,8 +17,34 @@ import {
   cleanEdge,
   cleanNode,
   sortParentsFirst,
-} from "./selection.js";
-import { TUBE_TYPE } from "./nodes/tube.js";
+} from "./selection.ts";
+import { TUBE_TYPE } from "./nodes/tube.ts";
+import type { Graph, OrdoEdge, OrdoNode } from "./types.ts";
+
+// What history diffs: a node or an edge, read as a plain record.
+type Item = { id: string } & Record<string, unknown>;
+
+// A key path into an item, outermost first: ["data", "attach", "t"].
+type Path = string[];
+
+// [id, path, before, after]. An empty path is the whole item, undefined on
+// the side where it does not exist.
+type Change = [id: string, path: Path, before: unknown, after: unknown];
+
+// The stretch of the id order that moved; see diffOrder.
+type Order = { at: number; before: string[]; after: string[] };
+
+type ListStep = { changes: Change[]; order: Order | null };
+
+/** One undo step: what changed in each list, or null where nothing did. */
+export type Step = { nodes: ListStep | null; edges: ListStep | null };
+
+export type Direction = "undo" | "redo";
+
+type Rules<T> = {
+  skip: (prev: T, next: T) => Set<string>;
+  clean: (item: T) => T;
+};
 
 // How far back undo reaches. Past this the oldest step falls off.
 export const HISTORY_LIMIT = 30;
@@ -38,25 +64,26 @@ const SKIP_EDGE = new Set(["selected"]);
 // step keeps its position — that is where it was dropped.
 const SKIP_RIDER = new Set([...SKIP_NODE, "position", "data.attach.angle"]);
 
-const isRiding = (node) =>
+const isRiding = (node: OrdoNode) =>
   node.type === TUBE_TYPE && Boolean(node.data?.attach);
 
-const NODES = {
+const NODES: Rules<OrdoNode> = {
   skip: (prev, next) =>
     isRiding(prev) && isRiding(next) ? SKIP_RIDER : SKIP_NODE,
   clean: cleanNode,
 };
-const EDGES = { skip: () => SKIP_EDGE, clean: cleanEdge };
+const EDGES: Rules<OrdoEdge> = { skip: () => SKIP_EDGE, clean: cleanEdge };
 
 // --- diff -------------------------------------------------------------------
 
-const isRecord = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  v !== null && typeof v === "object" && !Array.isArray(v);
 
-const idOf = (item) => item.id;
+const idOf = (item: Item) => item.id;
 
 // Structural equality for what a node holds: records, arrays, plain values. A
 // key holding undefined and a missing key are the same thing.
-function isEqual(a, b) {
+function isEqual(a: unknown, b: unknown): boolean {
   if (Object.is(a, b)) return true;
   if (!a || !b || typeof a !== "object" || typeof b !== "object") return false;
   if (Array.isArray(a) || Array.isArray(b)) {
@@ -67,8 +94,10 @@ function isEqual(a, b) {
       a.every((v, i) => isEqual(v, b[i]))
     );
   }
-  for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
-    if (!isEqual(a[key], b[key])) return false;
+  const x = a as Record<string, unknown>;
+  const y = b as Record<string, unknown>;
+  for (const key of new Set([...Object.keys(x), ...Object.keys(y)])) {
+    if (!isEqual(x[key], y[key])) return false;
   }
   return true;
 }
@@ -76,7 +105,13 @@ function isEqual(a, b) {
 // Every leaf that differs between `a` and `b`, as [path, before, after].
 // Records are walked key by key; anything else — an array, a plain value — is
 // one leaf, so a tube's `taps` change as a list rather than tap by tap.
-function diffValue(a, b, path, skip, out) {
+function diffValue(
+  a: unknown,
+  b: unknown,
+  path: Path,
+  skip: Set<string>,
+  out: [Path, unknown, unknown][],
+) {
   if (Object.is(a, b)) return;
   if (isRecord(a) && isRecord(b)) {
     for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
@@ -91,7 +126,7 @@ function diffValue(a, b, path, skip, out) {
 // The id order as a splice: the stretch between the longest common head and
 // tail, as it read on either side. An add, a delete, and the reshuffle
 // sortParentsFirst does after a re-parent each come out as one short stretch.
-function diffOrder(prev, next) {
+function diffOrder(prev: string[], next: string[]): Order | null {
   let head = 0;
   while (head < prev.length && head < next.length && prev[head] === next[head])
     head += 1;
@@ -114,19 +149,23 @@ function diffOrder(prev, next) {
 
 // One list, nodes or edges. Each change is [id, path, before, after]; an empty
 // path is the whole item, undefined on the side where it does not exist.
-function diffList(prev, next, rules) {
+function diffList<T extends Item>(
+  prev: T[],
+  next: T[],
+  rules: Rules<T>,
+): ListStep | null {
   if (prev === next) return null;
 
   const was = new Map(prev.map((item) => [item.id, item]));
   const is = new Map(next.map((item) => [item.id, item]));
-  const changes = [];
+  const changes: Change[] = [];
 
   for (const [id, a] of was) {
     const b = is.get(id);
     if (!b) {
       changes.push([id, [], rules.clean(a), undefined]);
     } else if (a !== b) {
-      const leaves = [];
+      const leaves: [Path, unknown, unknown][] = [];
       diffValue(a, b, [], rules.skip(a, b), leaves);
       for (const [path, before, after] of leaves)
         changes.push([id, path, before, after]);
@@ -145,7 +184,7 @@ function diffList(prev, next, rules) {
  * user made is different. A new selection, a re-measure, a drop highlight and a
  * rider re-seated on its edge all come out null.
  */
-export function diffGraph(before, after) {
+export function diffGraph(before: Graph, after: Graph): Step | null {
   const nodes = diffList(before.nodes, after.nodes, NODES);
   const edges = diffList(before.edges, after.edges, EDGES);
   return nodes || edges ? { nodes, edges } : null;
@@ -155,22 +194,32 @@ export function diffGraph(before, after) {
 
 // `record` with `value` written at `path`, each record on the way down copied
 // so nothing shared with another state is touched. undefined deletes the key.
-function setIn(record, [key, ...rest], value) {
-  const copy = { ...record };
+function setIn<R extends Record<string, unknown>>(
+  record: R,
+  [key, ...rest]: Path,
+  value: unknown,
+): R {
+  const copy: Record<string, unknown> = { ...record };
   if (rest.length) {
-    copy[key] = setIn(isRecord(record?.[key]) ? record[key] : {}, rest, value);
+    const inner = record?.[key];
+    copy[key] = setIn(isRecord(inner) ? inner : {}, rest, value);
   } else if (value === undefined) {
     delete copy[key];
   } else {
     copy[key] = value;
   }
-  return copy;
+  // The same record with one path rewritten, which is what a step recorded.
+  return copy as R;
 }
 
 // The live order with the step's stretch swapped for the other side's. If the
 // live order does not hold that stretch where the step expects it — something
 // moved that the step does not know about — the live order stands.
-function spliceOrder(ids, { at, before, after }, direction) {
+function spliceOrder(
+  ids: string[],
+  { at, before, after }: Order,
+  direction: Direction,
+) {
   const [from, to] = direction === "undo" ? [after, before] : [before, after];
   const holds =
     at + from.length <= ids.length && from.every((id, i) => ids[at + i] === id);
@@ -179,21 +228,27 @@ function spliceOrder(ids, { at, before, after }, direction) {
     : ids;
 }
 
-function applyList(items, { changes, order }, direction) {
+function applyList<T extends Item>(
+  items: T[],
+  { changes, order }: ListStep,
+  direction: Direction,
+): T[] {
   const byId = new Map(items.map((item) => [item.id, item]));
 
   for (const [id, path, before, after] of changes) {
     const value = direction === "undo" ? before : after;
+    const item = byId.get(id);
     if (!path.length) {
+      // a whole item, as the step recorded it
       if (value === undefined) byId.delete(id);
-      else byId.set(id, value);
-    } else if (byId.has(id)) {
-      byId.set(id, setIn(byId.get(id), path, value));
+      else byId.set(id, value as T);
+    } else if (item) {
+      byId.set(id, setIn(item, path, value));
     }
   }
 
   const ids = items.map(idOf);
-  const out = [];
+  const out: T[] = [];
   for (const id of order ? spliceOrder(ids, order, direction) : ids) {
     const item = byId.get(id);
     if (!item) continue;
@@ -210,15 +265,27 @@ function applyList(items, { changes, order }, direction) {
  * order a step restores already has parents first, so sortParentsFirst leaves
  * it alone; it only steps in if the live list had drifted.
  */
-export const applyNodes = (nodes, step, direction) =>
+export const applyNodes = (
+  nodes: OrdoNode[],
+  step: Step,
+  direction: Direction,
+) =>
   step.nodes
     ? sortParentsFirst(applyList(nodes, step.nodes, direction))
     : nodes;
 
-export const applyEdges = (edges, step, direction) =>
+export const applyEdges = (
+  edges: OrdoEdge[],
+  step: Step,
+  direction: Direction,
+) =>
   step.edges ? applyList(edges, step.edges, direction) : edges;
 
-export const applyStep = (graph, step, direction) => ({
+export const applyStep = (
+  graph: Graph,
+  step: Step,
+  direction: Direction,
+): Graph => ({
   nodes: applyNodes(graph.nodes, step, direction),
   edges: applyEdges(graph.edges, step, direction),
 });
@@ -231,12 +298,12 @@ export const applyStep = (graph, step, direction) => ({
  * overrides the steps it undid. `undo` and `redo` move one step across and hand
  * it back to be applied, or null when there is nothing on that side.
  */
-export function createUndoStack(limit = HISTORY_LIMIT) {
-  const done = [];
-  const undone = [];
+export function createUndoStack<S = Step>(limit = HISTORY_LIMIT) {
+  const done: S[] = [];
+  const undone: S[] = [];
 
   return {
-    push(step) {
+    push(step: S) {
       done.push(step);
       if (done.length > limit) done.shift();
       undone.length = 0;

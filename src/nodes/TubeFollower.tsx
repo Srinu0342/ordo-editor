@@ -1,7 +1,9 @@
 import { useLayoutEffect } from "react";
 import { useReactFlow, useStore } from "@xyflow/react";
-import { edgePathEl, pointAt } from "../edges/attach.js";
-import { TUBE_TYPE, TUBE_SIZE } from "./tube.js";
+import type { ReactFlowState } from "@xyflow/react";
+import { edgePathEl, pointAt } from "../edges/attach.ts";
+import { TUBE_TYPE, TUBE_SIZE } from "./tube.ts";
+import type { Attach, OrdoEdge, OrdoNode } from "../types.ts";
 
 // The half of the attachment that runs every frame.
 //
@@ -30,12 +32,13 @@ import { TUBE_TYPE, TUBE_SIZE } from "./tube.js";
 // attachments themselves — a tube that has just grabbed an edge has not moved
 // yet, and without that last part the frame that settles it never arrives.
 // Cheap to compare, and it changes exactly when a reposition is due.
-const geometrySignal = (s) => {
+const geometrySignal = (s: ReactFlowState) => {
   let acc = "";
   for (const [id, node] of s.nodeLookup) {
     const p = node.internals.positionAbsolute;
     acc += `${id}:${p.x},${p.y},${node.measured?.width},${node.measured?.height}`;
-    const attach = node.data?.attach;
+    // The store is not typed with Ordo's nodes; this is a rider's `attach`.
+    const attach = node.data?.attach as Attach | undefined;
     if (attach) acc += `@${attach.edgeId},${attach.t},${attach.shift ?? 0}`;
     acc += ";";
   }
@@ -50,13 +53,16 @@ const geometrySignal = (s) => {
 const EPS = 0.25;
 
 export default function TubeFollower() {
-  const { setNodes, getNodes, getEdges, getInternalNode } = useReactFlow();
+  const { setNodes, getNodes, getEdges, getInternalNode } = useReactFlow<
+    OrdoNode,
+    OrdoEdge
+  >();
   const signal = useStore(geometrySignal);
 
   useLayoutEffect(() => {
     const live = new Set(getEdges().map((e) => e.id));
-    const moves = new Map();
-    const dropped = new Set();
+    const moves = new Map<string, { x: number; y: number; angle: number }>();
+    const dropped = new Set<string>();
 
     for (const node of getNodes()) {
       if (node.type !== TUBE_TYPE) continue;

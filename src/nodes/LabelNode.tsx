@@ -1,20 +1,22 @@
 import { useCallback } from "react";
 import { useReactFlow } from "@xyflow/react";
-import { LIGHT } from "../theme.js";
-import EditableLabel from "./EditableLabel.jsx";
-import { Anchors, nodeTheme } from "./chrome.jsx";
+import type { NodeProps } from "@xyflow/react";
+import { LIGHT } from "../theme.ts";
+import EditableLabel from "./EditableLabel.tsx";
+import { Anchors, nodeTheme } from "./chrome.tsx";
+import type { OrdoEdge, OrdoNode } from "../types.ts";
 
 // Text with no frame. The degenerate case: there is no outline for an edge to
 // terminate against, so anchors fall back to the text's own bounding box. Worth
 // building early precisely because it breaks the assumption every other
 // component quietly makes.
 
-export default function LabelNode({ id, data, selected }) {
-  const { setNodes } = useReactFlow();
+export default function LabelNode({ id, data, selected }: NodeProps<OrdoNode>) {
+  const { setNodes } = useReactFlow<OrdoNode, OrdoEdge>();
   const theme = nodeTheme(selected);
 
   const setLabel = useCallback(
-    (value) =>
+    (value: string) =>
       setNodes((nds) =>
         nds.map((nd) =>
           nd.id === id ? { ...nd, data: { ...nd.data, label: value } } : nd,

@@ -4,10 +4,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { IMPORTABLE, detectDiagram, importMermaid } from "../index.js";
-import { LOUNGE } from "./fixtures.js";
+import { IMPORTABLE, detectDiagram, importMermaid } from "../index.ts";
+import { LOUNGE } from "./fixtures.ts";
 
-const family = (text) => detectDiagram(text).family;
+const family = (text: string) => detectDiagram(text).family;
 
 test("sequence diagrams are recognised however they open", () => {
   assert.equal(family("sequenceDiagram\n  A->>B: hi"), "sequence");
@@ -70,7 +70,7 @@ test("text that is not Mermaid at all is said to be so", () => {
 
 test("the router refuses what it has no importer for, by name", async () => {
   await assert.rejects(importMermaid("classDiagram\n  A <|-- B"), /Class diagram.*flowcharts and sequence diagrams/);
-  await assert.rejects(importMermaid("classDiagram\n  A <|-- B"), (err) => err.message.endsWith(IMPORTABLE));
+  await assert.rejects(importMermaid("classDiagram\n  A <|-- B"), (err: Error) => err.message.endsWith(IMPORTABLE));
   await assert.rejects(importMermaid("hello world"), /Not a Mermaid diagram/);
 });
 

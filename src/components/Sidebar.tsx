@@ -1,18 +1,21 @@
 import { useMemo, useRef, useState } from "react";
+import type { CSSProperties, DragEvent, ReactNode } from "react";
 import { useReactFlow } from "@xyflow/react";
 import {
   SHAPE_GROUPS,
   SHAPES,
   defaultSize,
   drawShape,
-} from "../shapes/registry.js";
-import { opsToSvg, svgDataUri } from "../render/svgWalker.js";
-import { LIGHT } from "../theme.js";
-import { ROUTES, ROUTE_KEYS, MARKERS, MARKER_KEYS } from "../edges/index.js";
+} from "../shapes/registry.ts";
+import { opsToSvg, svgDataUri } from "../render/svgWalker.ts";
+import { LIGHT } from "../theme.ts";
+import { ROUTES, ROUTE_KEYS, MARKERS, MARKER_KEYS } from "../edges/index.ts";
 
 // Icon rail plus the panel it swaps. Nodes are dragged onto the canvas; edges
 // are armed and then drawn by connecting two handles — different interactions,
 // which is why they are separate panels rather than two sections of one scroll.
+
+export type Panel = "nodes" | "edges";
 
 const RAIL_WIDTH = 48;
 const PANEL_WIDTH = 214;
@@ -47,13 +50,13 @@ const STRUCTURAL = [
   },
 ];
 
-const wrapSvg = (body) =>
+const wrapSvg = (body: string) =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 56 36" width="56" height="36">${body}</svg>`;
 
 // THE payoff of the op-list: the palette renders through the headless walker.
 // Every swatch you see is proof the no-DOM renderer works, and any divergence
 // between it and the canvas shows up here first rather than in a CI diff.
-function shapePreview(key) {
+function shapePreview(key: string) {
   const [w, h] = defaultSize(key);
   const s = Math.min(48 / w, 28 / h);
   const pw = w * s;
@@ -69,7 +72,7 @@ function shapePreview(key) {
   return wrapSvg(`<g transform="translate(${dx} ${dy})">${body}</g>`);
 }
 
-const RAIL = [
+const RAIL: { key: Panel; title: string; icon: ReactNode }[] = [
   {
     key: "nodes",
     title: "Nodes",
@@ -111,7 +114,7 @@ const RAIL = [
   },
 ];
 
-const sectionTitle = {
+const sectionTitle: CSSProperties = {
   fontSize: 10.5,
   letterSpacing: ".08em",
   textTransform: "uppercase",
@@ -120,7 +123,17 @@ const sectionTitle = {
   margin: "12px 0 6px",
 };
 
-function Swatch({ kind, title, src, onDragStart }) {
+function Swatch({
+  kind,
+  title,
+  src,
+  onDragStart,
+}: {
+  kind: string;
+  title: string;
+  src: string;
+  onDragStart: (e: DragEvent<HTMLDivElement>) => void;
+}) {
   return (
     <div
       draggable
@@ -153,17 +166,23 @@ export default function Sidebar({
   route,
   onRouteChange,
   onInspect,
+}: {
+  panel: Panel;
+  onPanelChange: (panel: Panel) => void;
+  route: string;
+  onRouteChange: (route: string) => void;
+  onInspect?: () => void;
 }) {
   const [q, setQ] = useState("");
   const [isCollapsed, setIsCollapsed] = useState(false);
   const { getViewport, setViewport } = useReactFlow();
-  const asideRef = useRef(null);
+  const asideRef = useRef<HTMLElement>(null);
   const shedWidth = useRef(0);
 
   // Previews are pure functions of the registry, so they are built once and
   // reused for the life of the session.
   const previews = useMemo(() => {
-    const out = {};
+    const out: Record<string, string> = {};
     for (const key of Object.keys(SHAPES))
       out[key] = svgDataUri(shapePreview(key));
     for (const s of STRUCTURAL) out[s.kind] = svgDataUri(wrapSvg(s.svg));
@@ -171,10 +190,10 @@ export default function Sidebar({
   }, []);
 
   const needle = q.trim().toLowerCase();
-  const match = (key, label) =>
+  const match = (key: string, label: string) =>
     !needle || key.includes(needle) || label.toLowerCase().includes(needle);
 
-  const drag = (kind) => (e) => {
+  const drag = (kind: string) => (e: DragEvent<HTMLDivElement>) => {
     e.dataTransfer.setData("application/ordo", kind);
     e.dataTransfer.effectAllowed = "move";
   };
@@ -183,7 +202,7 @@ export default function Sidebar({
   // and drags the whole diagram left. Shifting the viewport by the width we
   // gave up keeps the grid visually anchored. Viewport x is applied before
   // scale, so the delta is the same at any zoom.
-  const setCollapsed = (next) => {
+  const setCollapsed = (next: boolean) => {
     if (next === isCollapsed) return;
     if (next) shedWidth.current = asideRef.current?.offsetWidth ?? 0;
     const dx = next ? shedWidth.current : -shedWidth.current;
@@ -195,7 +214,7 @@ export default function Sidebar({
   // Activity-bar behaviour: the active icon toggles the panel shut, any other
   // icon reopens it on that panel. Without the reopen branch, clicking a rail
   // icon while collapsed would look like a dead button.
-  const selectPanel = (key) => {
+  const selectPanel = (key: Panel) => {
     if (isCollapsed) {
       setCollapsed(false);
       onPanelChange(key);
@@ -206,11 +225,13 @@ export default function Sidebar({
     }
   };
 
-  const groups = SHAPE_GROUPS.map(([id, title, set]) => [
-    id,
-    title,
-    Object.keys(set).filter((k) => match(k, set[k].label)),
-  ]).filter(([, , keys]) => keys.length);
+  const groups = SHAPE_GROUPS.map(
+    ([id, title, set]): [id: string, title: string, keys: string[]] => [
+      id,
+      title,
+      Object.keys(set).filter((k) => match(k, set[k].label)),
+    ],
+  ).filter(([, , keys]) => keys.length);
 
   const structural = STRUCTURAL.filter((s) => match(s.kind, s.label));
   const total = groups.reduce((n, g) => n + g[2].length, 0) + structural.length;
@@ -458,13 +479,15 @@ export default function Sidebar({
                     width="26"
                     height="12"
                     viewBox="0 0 26 12"
-                    style={{
-                      flex: "0 0 auto",
-                      // the same marker elements, drawn with literal colours
-                      // instead of the edge's context-stroke
-                      "--mk-line": "#475569",
-                      "--mk-solid": "#475569",
-                    }}
+                    style={
+                      {
+                        flex: "0 0 auto",
+                        // the same marker elements, drawn with literal colours
+                        // instead of the edge's context-stroke
+                        "--mk-line": "#475569",
+                        "--mk-solid": "#475569",
+                      } as CSSProperties
+                    }
                   >
                     <path d="M1 6 H13" stroke="#475569" strokeWidth="1.4" />
                     <g

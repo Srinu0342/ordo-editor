@@ -1,12 +1,14 @@
-import BoxNode from "./BoxNode.jsx";
-import ContainerNode from "./ContainerNode.jsx";
-import CompartmentNode from "./CompartmentNode.jsx";
-import LabelNode from "./LabelNode.jsx";
-import TubeNode from "./TubeNode.jsx";
-import FragmentNode from "./FragmentNode.jsx";
-import { TUBE_TYPE, TUBE_SIZE } from "./tube.js";
-import { FRAGMENT_TYPE } from "./fragment.js";
-import { defaultSize, DEFAULT_SHAPE } from "../shapes/registry.js";
+import BoxNode from "./BoxNode.tsx";
+import ContainerNode from "./ContainerNode.tsx";
+import CompartmentNode from "./CompartmentNode.tsx";
+import LabelNode from "./LabelNode.tsx";
+import TubeNode from "./TubeNode.tsx";
+import FragmentNode from "./FragmentNode.tsx";
+import { TUBE_TYPE, TUBE_SIZE } from "./tube.ts";
+import { FRAGMENT_TYPE } from "./fragment.ts";
+import type { CSSProperties } from "react";
+import { defaultSize, DEFAULT_SHAPE } from "../shapes/registry.ts";
+import type { NodeData, OrdoNode, Size, XY } from "../types.ts";
 
 // Six components. Everything in the shape registry is a `box` carrying a
 // different `data.shape`; only these six are node TYPES.
@@ -21,23 +23,32 @@ export const nodeTypes = {
 
 // Types that accept children. Kept here rather than in App so the containment
 // rules travel with the components that implement them.
-export const GROUP_TYPES = new Set(["container"]);
+export const GROUP_TYPES = new Set<string | undefined>(["container"]);
 
 // Types a drop never adopts. A tube belongs to the edge it rides, and a node
 // cannot be held by two frames of reference at once — dropped into a group, it
 // would be a child that its follower keeps yanking around inside its parent.
 // The one way a tube gets a parent is an import: a diagram's bars are created
 // inside the diagram's group, together with the lifelines they ride, so the
-// group and the edge always move them the same way (see mermaid/group.js).
-export const UNPARENTED_TYPES = new Set([TUBE_TYPE]);
+// group and the edge always move them the same way (see mermaid/group.ts).
+export const UNPARENTED_TYPES = new Set<string | undefined>([TUBE_TYPE]);
 
-export const isUnparented = (node) => UNPARENTED_TYPES.has(node?.type);
+export const isUnparented = (node?: Pick<OrdoNode, "type">) =>
+  UNPARENTED_TYPES.has(node?.type);
 
-export { TUBE_TYPE, TUBE_SIZE, TRACK } from "./tube.js";
-export { FRAGMENT_TYPE } from "./fragment.js";
-export { default as TubeFollower } from "./TubeFollower.jsx";
+export { TUBE_TYPE, TUBE_SIZE, TRACK } from "./tube.ts";
+export { FRAGMENT_TYPE } from "./fragment.ts";
+export { default as TubeFollower } from "./TubeFollower.tsx";
 
-export const NODE_TYPE_DEFAULTS = {
+type TypeDefaults = {
+  size: Size;
+  data: NodeData;
+  // anything but the size, which `size` holds
+  style?: Omit<CSSProperties, "width" | "height">;
+  zIndex?: number;
+};
+
+export const NODE_TYPE_DEFAULTS: Record<string, TypeDefaults> = {
   container: { size: [340, 210], data: { label: "group" } },
   compartment: {
     size: [190, 118],
@@ -58,38 +69,48 @@ export const NODE_TYPE_DEFAULTS = {
 
 // One place that knows how to turn a palette pick into a node, so the drop
 // handler and any future "add node" command cannot drift apart.
-export function makeNode(kind, { id, position, parentId, data }) {
-  const isShape = !NODE_TYPE_DEFAULTS[kind];
+export function makeNode(
+  kind: string,
+  {
+    id,
+    position,
+    parentId,
+    data,
+  }: { id: string; position: XY; parentId?: string; data?: NodeData },
+): OrdoNode {
+  const spec: TypeDefaults | undefined = NODE_TYPE_DEFAULTS[kind];
+  const isShape = !spec;
   const type = isShape ? "box" : kind;
-  const spec = NODE_TYPE_DEFAULTS[kind] ?? {};
   const [w, h] = isShape ? defaultSize(kind) : spec.size;
 
   return {
     id,
     type,
     position,
-    style: { width: w, height: h, ...spec.style },
+    style: { width: w, height: h, ...spec?.style },
     data: isShape
       ? { shape: kind ?? DEFAULT_SHAPE, label: "", ...data }
       : { ...spec.data, ...data },
-    ...(spec.zIndex !== undefined ? { zIndex: spec.zIndex } : {}),
+    ...(spec?.zIndex !== undefined ? { zIndex: spec.zIndex } : {}),
     ...(parentId ? { parentId } : {}),
   };
 }
 
-export const nodeSize = (kind) =>
+export const nodeSize = (kind: string): Size =>
   NODE_TYPE_DEFAULTS[kind]?.size ?? defaultSize(kind);
 
 // The palette key a live node came from: `box` carries it in data.shape,
 // every other type IS its key. Lets a node be measured, cloned or re-drawn
 // without the caller knowing which of the two cases it is looking at.
-export const nodeKind = (node) =>
-  node.type === "box" ? (node.data?.shape ?? DEFAULT_SHAPE) : node.type;
+export const nodeKind = (node: OrdoNode) =>
+  node.type === "box"
+    ? (node.data?.shape ?? DEFAULT_SHAPE)
+    : (node.type ?? DEFAULT_SHAPE);
 
 // Best available size for a node that may not be mounted yet — a freshly
 // pasted node has to be hit-tested against groups before React Flow has
 // measured it, so fall back through the explicit style to the registry.
-export const sizeOfNode = (node) => [
+export const sizeOfNode = (node: OrdoNode): Size => [
   node.width ?? node.style?.width ?? nodeSize(nodeKind(node))[0],
   node.height ?? node.style?.height ?? nodeSize(nodeKind(node))[1],
 ];
