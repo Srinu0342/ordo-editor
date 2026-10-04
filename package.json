@@ -11,9 +11,9 @@
     "preview": "vite preview"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
+  "author": "Subhadip Hazra",
+  "license": "MIT",
+  "description": "A diagram editor where every shape is data, with Mermaid import",
   "dependencies": {
     "@tisoap/react-flow-smart-edge": "^5.0.0",
     "@xyflow/react": "^12.11.6",
