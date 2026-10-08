@@ -1,0 +1,16 @@
+ordo: 1
+nodes:
+  - api
+  - vpc:
+      - db
+      - api
+edges:
+  - { id: e1, from: api, to: cache }
+data:
+  nodes:
+    vpc:
+      shape: rect
+    ghost:
+      label: Nobody
+    db:
+      shape: blob

@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, RefObject } from "react";
 import {
   STROKE_SWATCHES,
   STROKE_WEIGHTS,
@@ -8,6 +8,7 @@ import {
 import type { EdgeStyle } from "../edgeStyle.ts";
 import { MARKERS, MARKER_KEYS } from "../edges/index.ts";
 import { HISTORY_LIMIT } from "../history.ts";
+import { FileIcon } from "./DialogFrame.tsx";
 
 const MOD = navigator.platform.startsWith("Mac") ? "\u2318" : "Ctrl";
 
@@ -34,6 +35,22 @@ const selectStyle: CSSProperties = {
   padding: "0 6px",
   cursor: "pointer",
   maxWidth: 148,
+};
+
+// The import and export buttons at the end of the strip.
+const importButton: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 7,
+  height: 28,
+  padding: "0 11px",
+  borderRadius: 6,
+  border: "1px solid #cbd5e1",
+  background: "#f8fafc",
+  font: "inherit",
+  fontSize: 12.5,
+  color: "#334155",
+  cursor: "pointer",
 };
 
 const MARKER_GROUPS = [
@@ -97,12 +114,21 @@ export default function Toolbar({
   selectedCount,
   selectedNodeCount = 0,
   onImport,
+  onImportYaml,
+  onViewYaml,
+  importYamlRef,
+  viewYamlRef,
 }: {
   value: EdgeStyle;
   onChange: (patch: Partial<EdgeStyle>) => void;
   selectedCount: number;
   selectedNodeCount?: number;
   onImport: () => void;
+  onImportYaml: () => void;
+  onViewYaml: () => void;
+  // The .ordo dialogs hand focus back to the button that opened them.
+  importYamlRef?: RefObject<HTMLButtonElement | null>;
+  viewYamlRef?: RefObject<HTMLButtonElement | null>;
 }) {
   const activeType = lineTypeOf(value.dash);
   const picked = [
@@ -254,21 +280,7 @@ export default function Toolbar({
         type="button"
         onClick={onImport}
         title="Import a Mermaid diagram"
-        style={{
-          marginLeft: 10,
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 7,
-          height: 28,
-          padding: "0 11px",
-          borderRadius: 6,
-          border: "1px solid #cbd5e1",
-          background: "#f8fafc",
-          font: "inherit",
-          fontSize: 12.5,
-          color: "#334155",
-          cursor: "pointer",
-        }}
+        style={{ ...importButton, marginLeft: 10 }}
       >
         <svg width="14" height="14" viewBox="0 0 18 18" fill="none">
           <rect
@@ -297,6 +309,28 @@ export default function Toolbar({
           />
         </svg>
         Import Mermaid
+      </button>
+
+      <button
+        ref={importYamlRef}
+        type="button"
+        onClick={onImportYaml}
+        title="Open a diagram from its .ordo and .layout.ordo files"
+        style={{ ...importButton, marginLeft: 6 }}
+      >
+        <FileIcon size={14} inside="in" />
+        Import  Ordo YAML
+      </button>
+
+      <button
+        ref={viewYamlRef}
+        type="button"
+        onClick={onViewYaml}
+        title="See the canvas as .ordo YAML, and copy it"
+        style={{ ...importButton, marginLeft: 6 }}
+      >
+        <FileIcon size={14} inside="code" />
+        View Ordo YAML
       </button>
     </div>
   );

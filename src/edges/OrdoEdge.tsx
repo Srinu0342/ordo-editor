@@ -1,8 +1,14 @@
 import { useCallback } from "react";
-import { BaseEdge, EdgeLabelRenderer, useReactFlow } from "@xyflow/react";
+import {
+  BaseEdge,
+  EdgeLabelRenderer,
+  useInternalNode,
+  useReactFlow,
+} from "@xyflow/react";
 import type { EdgeProps, EdgeTypes } from "@xyflow/react";
 import { route, ROUTE_KEYS } from "./routers.ts";
 import { markerUrl } from "./markers.tsx";
+import { defaultEnds, nodeBox } from "./faces.ts";
 import EditableLabel from "../nodes/EditableLabel.tsx";
 // Aliased: in this file `OrdoEdge` is the component.
 import type {
@@ -27,6 +33,10 @@ const PLACE: Record<LabelPlacement, (x: number, y: number) => string> = {
 
 function OrdoEdge({
   id,
+  source,
+  target,
+  sourceHandleId,
+  targetHandleId,
   sourceX,
   sourceY,
   targetX,
@@ -37,13 +47,28 @@ function OrdoEdge({
   style,
   routeKey,
 }: EdgeProps<OrdoEdgeType> & { routeKey: string }) {
+  // An end that names no handle would be drawn from the first anchor React
+  // Flow finds, the top one, so two nodes side by side would be joined top to
+  // top. Such an end takes the face that looks at the other node instead (see
+  // edges/faces.ts), from the anchor that face would have if it were named. An
+  // end that names its handle is drawn exactly where React Flow puts it.
+  const sourceNode = useInternalNode<OrdoNode>(source);
+  const targetNode = useInternalNode<OrdoNode>(target);
+  const ends =
+    sourceHandleId == null || targetHandleId == null
+      ? defaultEnds(nodeBox(sourceNode), nodeBox(targetNode), {
+          source: sourceHandleId != null,
+          target: targetHandleId != null,
+        })
+      : {};
+
   const [edgePath, labelX, labelY] = route(routeKey, {
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
+    sourceX: ends.source?.x ?? sourceX,
+    sourceY: ends.source?.y ?? sourceY,
+    sourcePosition: ends.source?.position ?? sourcePosition,
+    targetX: ends.target?.x ?? targetX,
+    targetY: ends.target?.y ?? targetY,
+    targetPosition: ends.target?.position ?? targetPosition,
   });
 
   const { setEdges } = useReactFlow<OrdoNode, OrdoEdgeType>();

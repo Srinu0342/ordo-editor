@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ordo:schema:ordo:1",
+  "title": "Ordo diagram: structure and content (<name>.ordo)",
+  "type": "object",
+  "required": ["ordo", "nodes"],
+  "additionalProperties": false,
+  "properties": {
+    "ordo": { "const": 1, "description": "Format version." },
+    "nodes": { "$ref": "#/$defs/children", "description": "Skeleton tree. A string is a leaf node id; a one-key object is a group whose value lists its children." },
+    "edges": { "type": "array", "items": { "$ref": "#/$defs/edge" } },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "nodes": { "type": "object", "propertyNames": { "$ref": "#/$defs/id" }, "additionalProperties": { "$ref": "#/$defs/nodeData" } },
+        "edges": { "type": "object", "propertyNames": { "$ref": "#/$defs/id" }, "additionalProperties": { "$ref": "#/$defs/edgeData" } }
+      }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[^\\s\\u0000-\\u001f\\u007f]([^\\u0000-\\u001f\\u007f]*[^\\s\\u0000-\\u001f\\u007f])?$" },
+    "children": { "type": "array", "items": { "$ref": "#/$defs/item" } },
+    "item": {
+      "oneOf": [
+        { "$ref": "#/$defs/id" },
+        {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/id" },
+          "additionalProperties": { "$ref": "#/$defs/children" }
+        }
+      ]
+    },
+    "edge": {
+      "type": "object",
+      "required": ["id", "from", "to"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "from": { "$ref": "#/$defs/id" },
+        "to": { "$ref": "#/$defs/id" }
+      }
+    },
+    "strings": { "type": "array", "items": { "type": "string" } },
+    "numbers": { "type": "array", "items": { "type": "number" } },
+    "marker": {
+      "enum": ["none", "arrow", "open-arrow", "circle", "cross", "inheritance", "composition", "aggregation", "dependency", "er-one", "er-many", "er-zero-one", "er-zero-many", "er-one-many"]
+    },
+    "nodeData": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["box", "text", "class", "tube", "fragment"], "description": "What a leaf is; default box. Groups come from the skeleton." },
+        "label": { "type": "string" },
+        "shape": { "type": "string", "description": "box only" },
+        "type": { "type": "string", "pattern": "^[a-z][a-z0-9-]*(/[a-z0-9][a-z0-9-]*)*$" },
+        "collapsed": { "type": "boolean", "description": "group only" },
+        "members": { "$ref": "#/$defs/strings", "description": "group only" },
+        "mermaid": { "type": "string", "description": "group only: the Mermaid diagram type it was imported from" },
+        "sections": { "type": "array", "items": { "$ref": "#/$defs/strings" }, "description": "class only" },
+        "slots": { "type": "integer", "minimum": 1, "description": "tube only" },
+        "taps": { "$ref": "#/$defs/numbers", "description": "tube only" },
+        "variant": { "enum": ["track"], "description": "tube only" },
+        "attach": { "$ref": "#/$defs/id", "description": "tube only: the edge it rides" },
+        "align": { "type": "boolean", "description": "tube only" },
+        "operator": { "type": "string", "description": "fragment only" },
+        "guards": { "$ref": "#/$defs/strings", "description": "fragment only" },
+        "dividers": { "$ref": "#/$defs/numbers", "description": "fragment only" },
+        "fill": { "type": "string", "description": "fragment only" }
+      }
+    },
+    "edgeData": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "label": { "type": "string" },
+        "line": { "enum": ["solid", "dotted", "dashed", "thick"] },
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "color": { "type": "string" },
+        "start": { "$ref": "#/$defs/marker" },
+        "end": { "$ref": "#/$defs/marker" },
+        "route": { "enum": ["step", "straight", "orthogonal", "curved"] },
+        "placement": { "enum": ["center", "above", "right"] },
+        "hidden": { "type": "boolean" }
+      }
+    }
+  }
+}

@@ -29,6 +29,9 @@ import Sidebar from "./components/Sidebar.tsx";
 import Toolbar from "./components/Toolbar.tsx";
 import ImportDialog from "./components/ImportDialog.tsx";
 import type { ImportDescription } from "./components/ImportDialog.tsx";
+import OrdoImportDialog from "./components/OrdoImportDialog.tsx";
+import type { OrdoImportResult } from "./components/OrdoImportDialog.tsx";
+import ViewYamlDialog from "./components/ViewYamlDialog.tsx";
 import AlignmentGuides from "./components/AlignmentGuides.tsx";
 import type { Panel } from "./components/Sidebar.tsx";
 import { alignRect, GUIDE_SNAP_PX } from "./alignment.ts";
@@ -52,7 +55,7 @@ import {
   DETACH_DIST,
 } from "./edges/attach.ts";
 import { edgeTypes, EdgeMarkers } from "./edges/index.ts";
-import { DEFAULT_EDGE_STYLE, applyEdgeStyle, newEdge } from "./edgeStyle.ts";
+import { DEFAULT_EDGE_STYLE, applyEdgeStyle } from "./edgeStyle.ts";
 import type { EdgeStyle } from "./edgeStyle.ts";
 import {
   IMPORTABLE,
@@ -72,20 +75,23 @@ import {
 } from "./selection.ts";
 import type { Clip } from "./selection.ts";
 import { useHistory, isTyping } from "./useHistory.ts";
+import { detectKind, emptySession, idMinter, mintId } from "./ordo/index.ts";
+import type { OrdoSession } from "./ordo/index.ts";
+import { connectionEdge } from "./ordo/rf-mapping.ts";
 import type { Attach, OrdoEdge, OrdoNode, Rect, XY } from "./types.ts";
 
-let seq = 0;
-// `taken` is the live id set: Mermaid import brings in ids we did not mint
-// ("A", "n0"…), so the counter alone is not a uniqueness guarantee.
-const nextId = (taken?: Set<string>) => {
-  let id;
-  do {
-    id = `n${seq++}`;
-  } while (taken?.has(id));
-  return id;
-};
+// Every id in play, nodes and edges together: the .ordo format keeps the two in
+// one namespace, and new ones are minted n<k> / e<k>, one above the highest in
+// use (see ordo/ids.ts).
+const idsOf = (nodes: { id: string }[], edges: { id: string }[]) => [
+  ...nodes.map((n) => n.id),
+  ...edges.map((e) => e.id),
+];
 
 const GRID = 10;
+
+// fitPending's value for "frame the whole canvas" rather than one group.
+const FIT_ALL = "\u0000all";
 
 // What the import dialog shows the moment text lands in it: the diagram type
 // Mermaid reads it as, and whether there is an importer for that type. A type
@@ -93,6 +99,9 @@ const GRID = 10;
 // dialog raises as a toast. Text that is not Mermaid at all has no type to
 // warn about; its label says so.
 const describeMermaid = (text: string): ImportDescription => {
+  // An .ordo file is YAML, not Mermaid; say where it goes instead.
+  if (detectKind(text))
+    return { ok: false, label: "This is an .ordo file — use Import  Ordo YAML", warning: null };
   const found = detectDiagram(text);
   return {
     ok: Boolean(found.family),
@@ -159,6 +168,16 @@ function Flow() {
   const [panel, setPanel] = useState<Panel>("nodes");
   const [edgeStyle, setEdgeStyle] = useState(DEFAULT_EDGE_STYLE);
   const [importOpen, setImportOpen] = useState(false);
+  const [yamlImportOpen, setYamlImportOpen] = useState(false);
+  const [yamlViewOpen, setYamlViewOpen] = useState(false);
+  const importYamlRef = useRef<HTMLButtonElement>(null);
+  const viewYamlRef = useRef<HTMLButtonElement>(null);
+
+  // The .ordo session, next to the canvas state: the documents of the last
+  // Ordo import or export, which the next export patches. Any other way of
+  // replacing the canvas (a Mermaid import) clears them, so an unrelated
+  // file's comments never leak into a new diagram.
+  const [session, setSession] = useState<OrdoSession>(() => emptySession());
   const [guides, setGuides] = useState<Guide[]>([]);
 
   const { screenToFlowPosition, toObject, getInternalNode, fitView, getZoom } =
@@ -180,8 +199,16 @@ function Flow() {
   const pointerRef = useRef<XYPosition | null>(null);
   const clipboardRef = useRef<Clip | null>(null);
 
+  // A drawn edge gets an e<k> id, and is built by rfEdge whenever the toolbar's
+  // style is one .ordo v1 can store (see connectionEdge).
   const onConnect = useCallback<OnConnect>(
-    (c) => setEdges((eds) => addEdge(newEdge(c, edgeStyle), eds)),
+    (c) =>
+      setEdges((eds) =>
+        addEdge(
+          connectionEdge(c, mintId("e", idsOf(graphRef.current.nodes, eds)), edgeStyle),
+          eds,
+        ),
+      ),
     [setEdges, edgeStyle],
   );
 
@@ -587,17 +614,13 @@ function Flow() {
     (clip: Clip, { dx, dy }: { dx: number; dy: number }) => {
       if (!clip?.nodes.length) return;
 
-      const taken = new Set(graphRef.current.nodes.map((n) => n.id));
-      const newNodeId = () => {
-        const id = nextId(taken);
-        taken.add(id);
-        return id;
-      };
-      let edgeSeq = 0;
-      const newEdgeId = (source: string, target: string) =>
-        `e${edgeSeq++}-${source}-${target}`;
-
-      const fresh = cloneGraph(clip, { newNodeId, newEdgeId, dx, dy });
+      const mint = idMinter(idsOf(graphRef.current.nodes, graphRef.current.edges));
+      const fresh = cloneGraph(clip, {
+        newNodeId: mint.node,
+        newEdgeId: mint.edge,
+        dx,
+        dy,
+      });
 
       setNodes((nds) => {
         const landing = new Set(fresh.nodes.map((n) => n.id));
@@ -753,7 +776,7 @@ function Flow() {
     const id = fitPending.current;
     if (!id || !nodesInitialized) return;
     fitPending.current = null;
-    fitView({ nodes: [{ id }], padding: 0.2 });
+    fitView(id === FIT_ALL ? { padding: 0.2 } : { nodes: [{ id }], padding: 0.2 });
   }, [nodesInitialized, fitView]);
 
   // Where the next import lands: to the right of everything already on the
@@ -805,6 +828,7 @@ function Flow() {
         ...nds.map((n) => (n.selected ? { ...n, selected: false } : n)),
         ...grouped.map((n) => (n.id === id ? { ...n, selected: true } : n)),
       ]);
+      setSession((s) => ({ ...s, ordo: null, layout: null }));
       setEdges((eds) => [
         ...eds.map((e) => (e.selected ? { ...e, selected: false } : e)),
         ...wired,
@@ -813,6 +837,35 @@ function Flow() {
     },
     [setNodes, setEdges, besideContent],
   );
+
+  // An .ordo import REPLACES the canvas (one undo step, like any other write),
+  // becomes the session the next View Ordo YAML patches, and is framed once every
+  // node has been measured.
+  const onOrdoImport = useCallback(
+    ({ nodes: nds, edges: eds, ordo, layout, name }: OrdoImportResult) => {
+      setNodes(nds);
+      setEdges(eds);
+      setSession({ name, ordo, layout });
+      fitPending.current = FIT_ALL;
+    },
+    [setNodes, setEdges],
+  );
+
+  const onOrdoExported = useCallback(
+    ({ ordo, layout }: Pick<OrdoSession, "ordo" | "layout">) =>
+      setSession((s) => ({ ...s, ordo, layout })),
+    [],
+  );
+
+  // Both .ordo dialogs hand focus back to the button that opened them.
+  const closeYamlImport = useCallback(() => {
+    setYamlImportOpen(false);
+    importYamlRef.current?.focus();
+  }, []);
+  const closeYamlView = useCallback(() => {
+    setYamlViewOpen(false);
+    viewYamlRef.current?.focus();
+  }, []);
 
   const onDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
     event.preventDefault(); // required, or the drop never fires
@@ -848,7 +901,7 @@ function Flow() {
           : null;
 
       setNodes((nds) => {
-        const id = nextId(new Set(nds.map((n) => n.id)));
+        const id = mintId("n", idsOf(nds, graphRef.current.edges));
 
         if (hit) {
           return sortParentsFirst(
@@ -917,6 +970,24 @@ function Flow() {
         selectedCount={edges.reduce((n, e) => n + (e.selected ? 1 : 0), 0)}
         selectedNodeCount={nodes.reduce((n, x) => n + (x.selected ? 1 : 0), 0)}
         onImport={() => setImportOpen(true)}
+        onImportYaml={() => setYamlImportOpen(true)}
+        onViewYaml={() => setYamlViewOpen(true)}
+        importYamlRef={importYamlRef}
+        viewYamlRef={viewYamlRef}
+      />
+
+      <OrdoImportDialog
+        open={yamlImportOpen}
+        onClose={closeYamlImport}
+        canvasEmpty={nodes.length === 0 && edges.length === 0}
+        onImport={onOrdoImport}
+      />
+
+      <ViewYamlDialog
+        open={yamlViewOpen}
+        onClose={closeYamlView}
+        session={session}
+        onExported={onOrdoExported}
       />
 
       <ImportDialog

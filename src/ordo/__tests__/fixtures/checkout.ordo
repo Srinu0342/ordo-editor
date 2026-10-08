@@ -1,0 +1,42 @@
+# Checkout flow: structure and content. Geometry lives in checkout.layout.ordo.
+ordo: 1
+
+nodes:
+  - client
+  - vpc:
+      - gateway
+      - services:
+          - api
+          # primary store
+          - db
+  - queue
+
+edges:
+  - { id: e1, from: client, to: gateway }
+  - { id: e2, from: gateway, to: api }
+  - { id: e3, from: api, to: db }
+  - { id: e4, from: api, to: queue }
+
+data:
+  nodes:
+    client:
+      label: Browser
+    vpc:
+      label: Production VPC
+    gateway:
+      label: API Gateway
+      shape: rounded
+    services:
+      label: Services
+    api:
+      label: Payments API
+    db:
+      label: Postgres
+      shape: cylinder
+      type: store/postgres
+  edges:
+    e3:
+      label: query
+    e4:
+      label: publish
+      line: dotted

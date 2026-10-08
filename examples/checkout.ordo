@@ -1,0 +1,122 @@
+# Checkout system: who buys, what serves them, where orders go.
+ordo: 1
+
+nodes:
+  - customer
+  - web
+  - note
+  - vpc:
+      - gateway
+      - services:
+          - checkout
+          - paid
+          # the system of record
+          - db
+          - receipt
+  - queue
+  - order
+
+edges:
+  - { id: e1, from: customer, to: web }
+  - { id: e2, from: web, to: gateway }
+  - { id: e3, from: gateway, to: checkout }
+  - { id: e4, from: checkout, to: paid }
+  - { id: e5, from: checkout, to: db }
+  - { id: e6, from: paid, to: receipt }
+  - { id: e7, from: paid, to: queue }
+  - { id: e8, from: db, to: order }
+  - { id: e9, from: note, to: web }
+
+data:
+  nodes:
+    customer:
+      label: Customer
+      shape: person
+    web:
+      label: Web shop
+      shape: stadium
+    note:
+      kind: text
+      label: Guest checkout is allowed
+    vpc:
+      label: Production VPC
+    gateway:
+      label: API Gateway
+      shape: rounded
+    services:
+      label: Services
+    checkout:
+      label: Checkout API
+    paid:
+      label: Paid?
+      shape: diam
+    db:
+      label: Orders DB
+      shape: cyl
+      type: store/postgres
+    receipt:
+      label: Receipt
+      shape: doc
+    queue:
+      label: Order events
+      shape: hex
+      type: queue/kafka
+    order:
+      kind: class
+      label: Order
+      sections: [ [ "id: uuid", "total: money", "status: Status" ], [ pay(), refund() ] ]
+  edges:
+    e1:
+      label: browses
+    e2:
+      label: HTTPS
+      route: straight
+    e5:
+      label: insert
+      line: thick
+    e6:
+      label: "yes"
+    e7:
+      label: publish
+      line: dotted
+      color: "#16a34a"
+      route: curved
+    e8:
+      label: stores
+      line: dashed
+      color: "#94a3b8"
+      end: open-arrow
+      route: curved
+    e9:
+      line: dotted
+      color: "#94a3b8"
+      start: circle
+      end: none
+---
+# Geometry: integers, relative to the parent group.
+ordo-layout: 1
+
+nodes:
+  customer: { x: 0, y: 160 }
+  web: { x: 160, y: 184 }
+  note: { x: 140, y: 300, w: 200, h: 26 }
+  vpc: { x: 400, y: 40, w: 620, h: 430 }
+  gateway: { x: 30, y: 144 }
+  services: { x: 230, y: 50, w: 360, h: 340 }
+  checkout: { x: 30, y: 50 }
+  paid: { x: 40, y: 140 }
+  db: { x: 200, y: 50 }
+  receipt: { x: 30, y: 260 }
+  queue: { x: 1080, y: 300 }
+  order: { x: 1080, y: 60, w: 190, h: 150 }
+
+edges:
+  e1: { from: right, to: left }
+  e2: { from: right, to: left }
+  e3: { from: right, to: left }
+  e4: { from: bottom, to: top }
+  e5: { from: right, to: left }
+  e6: { from: bottom, to: top }
+  e7: { from: right, to: left }
+  e8: { from: right, to: left }
+  e9: { from: top, to: bottom }

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ordo:schema:ordo-layout:1",
+  "title": "Ordo layout: geometry (<name>.layout.ordo)",
+  "type": "object",
+  "required": ["ordo-layout"],
+  "additionalProperties": false,
+  "properties": {
+    "ordo-layout": { "const": 1, "description": "Format version." },
+    "nodes": { "type": "object", "propertyNames": { "$ref": "#/$defs/id" }, "additionalProperties": { "$ref": "#/$defs/box" } },
+    "edges": { "type": "object", "propertyNames": { "$ref": "#/$defs/id" }, "additionalProperties": { "$ref": "#/$defs/handles" } }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[^\\s\\u0000-\\u001f\\u007f]([^\\u0000-\\u001f\\u007f]*[^\\s\\u0000-\\u001f\\u007f])?$" },
+    "box": {
+      "type": "object",
+      "required": ["x", "y"],
+      "additionalProperties": false,
+      "properties": {
+        "x": { "type": "integer" },
+        "y": { "type": "integer" },
+        "w": { "type": "integer", "minimum": 1 },
+        "h": { "type": "integer", "minimum": 1 },
+        "z": { "type": "integer" },
+        "rotation": { "type": "number" },
+        "t": { "type": "number" },
+        "shift": { "type": "number" },
+        "angle": { "type": "number" }
+      }
+    },
+    "handles": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "from": { "type": "string", "minLength": 1 },
+        "to": { "type": "string", "minLength": 1 },
+        "z": { "type": "integer" }
+      }
+    }
+  }
+}

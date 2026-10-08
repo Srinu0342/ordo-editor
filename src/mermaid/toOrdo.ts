@@ -1,5 +1,7 @@
 import { SHAPES, DEFAULT_SHAPE } from "../shapes/registry.ts";
+import { SHAPE_ALIASES as ALIASES } from "../shapes/aliases.ts";
 import { DEFAULT_EDGE_STYLE, applyEdgeStyle } from "../edgeStyle.ts";
+import { handlesFor } from "../edges/faces.ts";
 import type { LayoutData } from "mermaid";
 import type { MermaidLayout, Subgraph } from "./extractor.ts";
 import type { OrdoEdge, OrdoNode, XY } from "../types.ts";
@@ -23,99 +25,6 @@ type LayoutEdge = LayoutData["edges"][number];
 // ---------------------------------------------------------------------------
 // Shapes
 // ---------------------------------------------------------------------------
-
-// Mermaid's own alias table: every documented spelling of a shape, mapped to
-// its canonical shortName. Lifted verbatim from the shape registry in
-// mermaid@12, so `@{ shape: database }` and `@{ shape: cyl }` land together.
-const ALIASES: Record<string, string> = {
-  "bow-tie-rectangle": "bow-rect",
-  "brace-l": "brace",
-  card: "notch-rect",
-  circ: "circle",
-  collate: "hourglass",
-  "com-link": "bolt",
-  comment: "brace",
-  "crossed-circle": "cross-circ",
-  "curved-trapezoid": "curv-trap",
-  cylinder: "cyl",
-  das: "h-cyl",
-  "data-store": "datastore",
-  database: "cyl",
-  db: "cyl",
-  decision: "diam",
-  diamond: "diam",
-  directory: "folder",
-  disk: "lin-cyl",
-  display: "curv-trap",
-  "div-proc": "div-rect",
-  "divided-process": "div-rect",
-  "divided-rectangle": "div-rect",
-  document: "doc",
-  documents: "docs",
-  "double-circle": "dbl-circ",
-  event: "rounded",
-  extract: "tri",
-  "filled-circle": "f-circ",
-  "flipped-triangle": "flip-tri",
-  "framed-circle": "fr-circ",
-  "framed-rectangle": "fr-rect",
-  "half-rounded-rectangle": "delay",
-  hexagon: "hex",
-  "horizontal-cylinder": "h-cyl",
-  "in-out": "lean-r",
-  "internal-storage": "win-pane",
-  "inv-trapezoid": "trap-t",
-  join: "fork",
-  junction: "f-circ",
-  "lean-left": "lean-l",
-  "lean-right": "lean-r",
-  "lightning-bolt": "bolt",
-  "lin-proc": "lin-rect",
-  "lined-cylinder": "lin-cyl",
-  "lined-document": "lin-doc",
-  "lined-process": "lin-rect",
-  "lined-rectangle": "lin-rect",
-  "loop-limit": "notch-pent",
-  manual: "trap-t",
-  "manual-file": "flip-tri",
-  "manual-input": "sl-rect",
-  "notched-pentagon": "notch-pent",
-  "notched-rectangle": "notch-rect",
-  "out-in": "lean-l",
-  "paper-tape": "flag",
-  pill: "stadium",
-  prepare: "hex",
-  priority: "trap-b",
-  proc: "rect",
-  process: "rect",
-  processes: "st-rect",
-  procs: "st-rect",
-  question: "diam",
-  rectangle: "rect",
-  "shaded-process": "lin-rect",
-  "sloped-rectangle": "sl-rect",
-  "small-circle": "sm-circ",
-  "st-doc": "docs",
-  "stacked-document": "docs",
-  "stacked-rectangle": "st-rect",
-  start: "sm-circ",
-  stop: "fr-circ",
-  "stored-data": "bow-rect",
-  subproc: "fr-rect",
-  subprocess: "fr-rect",
-  subroutine: "fr-rect",
-  summary: "cross-circ",
-  "tag-proc": "tag-rect",
-  "tagged-document": "tag-doc",
-  "tagged-process": "tag-rect",
-  "tagged-rectangle": "tag-rect",
-  terminal: "stadium",
-  trapezoid: "trap-b",
-  "trapezoid-bottom": "trap-b",
-  "trapezoid-top": "trap-t",
-  triangle: "tri",
-  "window-pane": "win-pane",
-};
 
 // Sentinel: not a shape at all. These become the `label` node type, which is
 // our equivalent of a bare text block.
@@ -192,37 +101,9 @@ const ROUTE_BY_CURVE: Record<string, string> = {
   stepAfter: "orthogonal",
 };
 
-// Every anchor on a node is declared `type="source"` (the canvas runs in loose
-// connection mode), so React Flow cannot infer a side: left undefined it grabs
-// the first handle it finds — "n" — at BOTH ends, and every edge leaves the top
-// and arrives at the top. Mermaid never sends port information, so the side has
-// to be derived from the geometry it does send.
-const BY_DIRECTION: Record<string, [source: string, target: string]> = {
-  TB: ["s", "n"],
-  TD: ["s", "n"],
-  BT: ["n", "s"],
-  LR: ["e", "w"],
-  RL: ["w", "e"],
-};
-
-// Dominant axis between the two centres decides the pair, so a back-edge or a
-// sideways hop anchors sensibly instead of following the diagram direction off
-// the wrong face. Direction is only the fallback for coincident centres.
-function handlesFor(
-  from: XY | undefined,
-  to: XY | undefined,
-  direction: string | undefined,
-): [source: string, target: string] {
-  const fallback = BY_DIRECTION[direction ?? ""] ?? BY_DIRECTION.TB;
-  if (!from || !to) return fallback;
-
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  if (dx === 0 && dy === 0) return fallback;
-
-  if (Math.abs(dy) >= Math.abs(dx)) return dy >= 0 ? ["s", "n"] : ["n", "s"];
-  return dx >= 0 ? ["e", "w"] : ["w", "e"];
-}
+// Mermaid never sends port information, so which face of a node each edge
+// leaves from and arrives at is derived from the geometry it does send, by the
+// rule the canvas uses for every edge without a pinned side (edges/faces.ts).
 
 // `pattern` and `thickness` both carry the stroke keyword; either can be the
 // one that is set, so read both.
