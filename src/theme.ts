@@ -25,6 +25,7 @@ export const LIGHT: Theme = {
   "note.fill": "#fef9c3",
 
   "edge.stroke": "#0f172a",
+  "edge.stroke.selected": "#6366f1",
   "canvas.bg": "#ffffff",
   "canvas.grid": "#eeeeee",
 };
@@ -40,6 +41,7 @@ export const DARK: Theme = {
   "container.band": "#111827",
   "note.fill": "#3a3416",
   "edge.stroke": "#e2e8f0",
+  "edge.stroke.selected": "#818cf8",
   "canvas.bg": "#0f151b",
   "canvas.grid": "#1e293b",
 };

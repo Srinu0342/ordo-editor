@@ -33,6 +33,11 @@ const PLACE: Record<LabelPlacement, (x: number, y: number) => string> = {
   right: (x, y) => `translate(0, -50%) translate(${x + LABEL_GAP}px, ${y}px)`,
 };
 
+// Selection is a halo under the line rather than a recolour of it, so the
+// edge's own colour and dash stay visible — the toolbar restyles the selected
+// edge, and a recolour would hide the very change being made.
+const HALO_SPREAD = 6;
+
 function OrdoEdge({
   id,
   source,
@@ -47,6 +52,7 @@ function OrdoEdge({
   targetPosition,
   data,
   style,
+  selected,
   routeKey,
 }: EdgeProps<OrdoEdgeType> & { routeKey: string }) {
   // An end that names no handle would be drawn from the first anchor React
@@ -96,6 +102,18 @@ function OrdoEdge({
 
   return (
     <>
+      {selected && (
+        <path
+          d={edgePath}
+          fill="none"
+          stroke={theme["edge.stroke.selected"]}
+          strokeOpacity={0.35}
+          strokeWidth={Number(style?.strokeWidth ?? 1) + HALO_SPREAD}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          pointerEvents="none"
+        />
+      )}
       <BaseEdge
         id={id}
         path={edgePath}
