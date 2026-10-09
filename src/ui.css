@@ -78,6 +78,8 @@
 
 body {
   margin: 0; /* every page is exactly the viewport: a margin would scroll it */
+  /* Box labels inherit this: the face svgWalker draws them in, so canvas and palette match. */
+  font-family: system-ui, sans-serif;
   background: var(--ui-surface);
   color: var(--ui-ink);
 }

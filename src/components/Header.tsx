@@ -199,20 +199,7 @@ export default function Header({
 function Brand() {
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flex: "0 0 auto" }}>
-      <span
-        aria-hidden
-        style={{
-          width: 24,
-          height: 24,
-          borderRadius: 7,
-          display: "grid",
-          placeItems: "center",
-          background: "linear-gradient(135deg,var(--ui-accent-soft),var(--ui-accent-soft-2))",
-          color: "var(--ui-accent-ink)",
-        }}
-      >
-        <MermaidIcon />
-      </span>
+      <OrdoMark />
       <span style={{ fontSize: 14, fontWeight: 650, color: "var(--ui-ink)", letterSpacing: -0.1 }}>Ordo</span>
     </span>
   );
@@ -348,7 +335,15 @@ const Icon = ({ children, size = 15 }: { children: ReactNode; size?: number }) =
   </svg>
 );
 
-/** Two boxes and the line between them: Ordo's mark, and Mermaid import's icon. */
+/** The logo: an edge with a node riding it. Same geometry as public/favicon.svg. */
+const OrdoMark = () => (
+  <svg width="22" height="22" viewBox="0 0 64 64" aria-hidden>
+    <path d="M6 50 C30 50 34 14 58 14" fill="none" stroke="var(--ui-ink)" strokeWidth="6" strokeLinecap="round" />
+    <circle cx="32" cy="32" r="10" fill="var(--ui-accent)" />
+  </svg>
+);
+
+/** Two boxes and the line between them: Mermaid import's icon. */
 function MermaidIcon() {
   return (
     <Icon>

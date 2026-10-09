@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 206 64" width="206" height="64" role="img" aria-label="Ordo">
+  <g fill="none" stroke="#e2e8f0" stroke-width="6" stroke-linecap="round">
+    <path d="M6 50 C30 50 34 14 58 14"/>
+    <circle cx="88.5" cy="32" r="10.5"/>
+    <path d="M115 42 V32 A10.5 10.5 0 0 1 125.5 21.5 H127"/>
+    <circle cx="153.5" cy="32" r="10.5"/>
+    <path d="M164 7 V42"/>
+    <circle cx="189.5" cy="32" r="10.5"/>
+  </g>
+  <circle cx="32" cy="32" r="10" fill="#818cf8"/>
+</svg>

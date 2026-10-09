@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- The Ordo mark: an edge with a node riding it. Same geometry as docs/assets/ordo-logo-*.svg. -->
+  <style>
+    .edge { stroke: #0f172a; }
+    .bubble { fill: #6366f1; }
+    @media (prefers-color-scheme: dark) {
+      .edge { stroke: #e2e8f0; }
+      .bubble { fill: #818cf8; }
+    }
+  </style>
+  <path class="edge" d="M6 50 C30 50 34 14 58 14" fill="none" stroke-width="6" stroke-linecap="round"/>
+  <circle class="bubble" cx="32" cy="32" r="10"/>
+</svg>
