@@ -4,6 +4,7 @@ import { FolderIcon } from "./RepoBrowser.tsx";
 import { UnsyncedDot } from "./TabBar.tsx";
 import Popover, { MenuItem } from "./Popover.tsx";
 import { HISTORY_LIMIT } from "../history.ts";
+import { AUTO_SYNC_MS } from "../local/useLocalMode.ts";
 import type { Scheme } from "../colorScheme.ts";
 
 // The one bar across the top of every page. Left, where you are: Ordo, then
@@ -280,7 +281,7 @@ function SyncSegment({ sync }: { sync: SyncBar }) {
         type="button"
         onClick={sync.onSync}
         disabled={!sync.canSync}
-        title={`Sync with ${sync.tab ?? "the file"}: write the canvas, or load the file's changes (${MOD}+S)`}
+        title={`Sync with ${sync.tab ?? "the file"}: write the canvas, or load the file's changes (${MOD}+S). Also runs on its own every ${AUTO_SYNC_MS / 1000} seconds.`}
         style={{
           display: "inline-flex",
           alignItems: "center",

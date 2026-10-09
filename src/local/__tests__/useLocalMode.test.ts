@@ -1,6 +1,7 @@
 // Local mode's flows end to end, against an in-memory repo served the way
 // server/api.ts serves one: open, settle, sync both ways, conflicts, deleted
-// files, switching tabs with and without unsynced edits, and the address bar.
+// files, switching tabs with and without unsynced edits, the address bar, and
+// auto-sync.
 //
 // JSDOM measures nothing and there is no React Flow here, so the harness
 // stands in for its `nodesInitialized`: a new graph reads as unmeasured for
@@ -120,7 +121,7 @@ type View = {
   notes: string[];
 };
 
-function mount(t: TestContext, url = "/") {
+function mount(t: TestContext, url = "/", autoSyncMs?: number) {
   window.history.replaceState(null, "", url);
   const view = { downloads: [], notes: [] } as unknown as View;
   function Editor() {
@@ -137,6 +138,7 @@ function mount(t: TestContext, url = "/") {
       nodes,
       edges,
       nodesInitialized: nodes.length > 0 && measured === nodes,
+      autoSyncMs,
       replaceCanvas: (n, e) => {
         setNodes(n);
         setEdges(e);
@@ -399,6 +401,117 @@ test("a diagram that doesn't read opens as invalid, and Sync loads it once it is
   assert.equal(await run(() => view.local.sync()), true);
   await ready(view);
   assert.equal(view.nodes.length, 7);
+});
+
+// --- auto-sync ----------------------------------------------------------------
+
+const AUTO = 40;
+const CHECKOUT_URL = `/?source=local&repo=${REPO}&tab=checkout`;
+const apiLabel = (view: View) => view.nodes.find((n) => n.id === "api")?.data.label;
+
+test("auto-sync writes an edit with the base ETag, and says nothing", async (t) => {
+  const server = fakeServer(t, { checkout: CHECKOUT });
+  const view = mount(t, CHECKOUT_URL, AUTO);
+  await ready(view);
+  const before = server.etag("checkout");
+
+  drag(view, "api");
+  await until("the write", () => server.puts.length === 1 && !view.local.unsyncedNow());
+  assert.deepEqual(server.puts, [{ tab: "checkout", ifMatch: before, ifNoneMatch: null }]);
+  assert.equal(server.text("checkout"), exportOrdo(view.nodes, view.edges, view.session).text);
+  await tick(AUTO * 3);
+  assert.equal(server.puts.length, 1, "nothing more to write");
+  assert.deepEqual(view.notes, []);
+});
+
+test("auto-sync loads a file changed on disk when the canvas has no edits", async (t) => {
+  const server = fakeServer(t, { checkout: CHECKOUT });
+  const view = mount(t, CHECKOUT_URL, AUTO);
+  await ready(view);
+  server.edit("checkout", CHECKOUT.replace("label: Payments API", "label: Checkout API"));
+
+  await until("the file to load", () => apiLabel(view) === "Checkout API");
+  await ready(view);
+  assert.deepEqual(server.puts, []);
+  assert.deepEqual(view.notes, ["Loaded checkout from disk"]);
+  assert.equal(view.local.unsyncedNow(), false);
+});
+
+test("auto-sync doesn't load the file under someone typing", async (t) => {
+  const server = fakeServer(t, { checkout: CHECKOUT });
+  const view = mount(t, CHECKOUT_URL, AUTO);
+  await ready(view);
+  const field = document.createElement("input");
+  document.body.append(field);
+  t.after(() => field.remove());
+  field.focus();
+  server.edit("checkout", CHECKOUT.replace("label: Payments API", "label: Checkout API"));
+
+  await tick(AUTO * 4);
+  assert.equal(apiLabel(view), "Payments API");
+  field.blur();
+  await until("the file to load", () => apiLabel(view) === "Checkout API");
+});
+
+test("auto-sync leaves edits on both sides to Sync, and says so once", async (t) => {
+  const server = fakeServer(t, { checkout: CHECKOUT });
+  const view = mount(t, CHECKOUT_URL, AUTO);
+  await ready(view);
+  drag(view, "api");
+  server.edit("checkout", CHECKOUT.replace("label: Postgres", "label: Aurora"));
+
+  await until("the notice", () => view.notes.length > 0);
+  await tick(AUTO * 4);
+  assert.deepEqual(view.notes, ["checkout changed on disk and on the canvas. Press Sync to choose which to keep."]);
+  assert.equal(view.local.question, null, "it asks nothing");
+  assert.deepEqual(server.puts, []);
+
+  assert.equal(await answering(view, () => view.local.sync(), "conflict", "keep"), true);
+  assert.equal(server.puts.length, 1);
+  assert.doesNotMatch(server.text("checkout")!, /Aurora/);
+});
+
+test("auto-sync loads a diagram that doesn't read once it is fixed", async (t) => {
+  const server = fakeServer(t, { checkout: "ordo: 1\nnodes: [\n" });
+  const view = mount(t, CHECKOUT_URL, AUTO);
+  await until("the invalid panel", () => view.local.state.mode === "local" && view.local.state.status === "invalid");
+  await tick(AUTO * 3);
+  assert.deepEqual(view.notes, [], "still broken: nothing new to say");
+
+  server.edit("checkout", CHECKOUT);
+  await ready(view);
+  assert.equal(view.nodes.length, 7);
+  assert.deepEqual(view.notes, ["Loaded checkout"]);
+});
+
+test("a Sync pressed during an auto-sync waits for it rather than being dropped", async (t) => {
+  const server = fakeServer(t, { checkout: CHECKOUT });
+  const view = mount(t, CHECKOUT_URL, AUTO);
+  await ready(view);
+
+  // Hold auto-sync's next read of the file until the Sync is pressed.
+  const served = globalThis.fetch;
+  let release!: () => void;
+  const held = new Promise<void>((r) => (release = r));
+  let reads = 0;
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    if (!init?.method && url.startsWith("/api/diagrams/") && reads++ === 0) await held;
+    return served(url, init);
+  }) as typeof fetch;
+  try {
+    await until("auto-sync to be reading", () => reads > 0);
+    drag(view, "api");
+    let synced!: Promise<boolean>;
+    await act(async () => {
+      synced = view.local.sync();
+    });
+    release();
+    assert.equal(await run(() => synced), true);
+    assert.equal(server.puts.length, 1);
+    assert.ok(view.notes.includes("Synced checkout"));
+  } finally {
+    globalThis.fetch = served;
+  }
 });
 
 // --- leaving a diagram --------------------------------------------------------
