@@ -5,15 +5,17 @@ import type { OrdoEdge, OrdoNode } from "../types.ts";
 import * as api from "./api.ts";
 import { ApiError } from "./api.ts";
 import type { DiagramFile, Precondition } from "./api.ts";
+import { isTyping } from "../useHistory.ts";
 import { FREE, placeUrl, readPlace, samePlace } from "./location.ts";
 import type { Place } from "./location.ts";
 import { rememberRepo } from "./recent.ts";
 import { canvasState, decideSync } from "./sync.ts";
-import type { FileState } from "./sync.ts";
+import type { FileState, SyncAction } from "./sync.ts";
 import type { SyncChoice, SyncQuestion } from "../components/SyncDialog.tsx";
 
-// Local mode: one repo, its diagrams as tabs, and a manual two-way Sync. App
-// keeps the canvas; this keeps everything about which file the canvas is.
+// Local mode: one repo, its diagrams as tabs, and a two-way Sync that also runs
+// on its own every AUTO_SYNC_MS. App keeps the canvas; this keeps everything
+// about which file the canvas is.
 // With no repo open (mode "free") there is no canvas at all: App shows the
 // projects page, and the graph stays empty until a diagram is loaded.
 //
@@ -32,7 +34,12 @@ import type { SyncChoice, SyncQuestion } from "../components/SyncDialog.tsx";
 // asks first.
 //
 // The flows are async and ask questions mid-way (a conflict, leaving unsynced
-// edits). They run one at a time: a click while one is running is dropped.
+// edits). They run one at a time: a click while one is running is dropped,
+// except behind an auto-sync, which asks nothing and is waited out.
+//
+// Auto-sync does only what needs no one: write the canvas, load the file, pick
+// up a diagram that was fixed or deleted on disk. Anything that needs a choice
+// (a conflict, a file that doesn't read) it says once and leaves for Sync.
 
 export type LocalStatus = "loading" | "ready" | "empty" | "invalid" | "error";
 
@@ -57,6 +64,7 @@ export type LocalDeps = {
   nodes: OrdoNode[];
   edges: OrdoEdge[];
   nodesInitialized: boolean; // React Flow's: every visible node measured
+  autoSyncMs?: number; // AUTO_SYNC_MS unless a test wants it sooner
   replaceCanvas: (nodes: OrdoNode[], edges: OrdoEdge[]) => void;
   session: OrdoSession;
   setSession: (session: OrdoSession) => void;
@@ -78,6 +86,7 @@ const SETTLE_DEADLINE_MS = 4000;
 const SETTLE_MAX_FRAMES = 30;
 // The unsynced dot waits for the graph to stop changing: exporting is not free.
 const UNSYNCED_DEBOUNCE_MS = 300;
+export const AUTO_SYNC_MS = 10_000;
 
 /** A sentence for a call that failed. */
 function explain(e: unknown): string {
@@ -89,6 +98,18 @@ function explain(e: unknown): string {
 }
 
 const errorsOf = (out: OrdoExport) => out.diagnostics.filter((d) => d.severity === "error");
+
+// What auto-sync says instead of asking: the outcomes that need a person.
+const BOTH_CHANGED = (tab: string) => `${tab} changed on disk and on the canvas. Press Sync to choose which to keep.`;
+const UNWRITABLE = (tab: string) => `${tab} can't be written as it is. Press Sync to see why.`;
+const LEAVE_FOR_SYNC: Partial<Record<SyncAction, (tab: string) => string>> = {
+  "show-invalid": (tab) => `${tab} changed on disk and doesn't read as an Ordo diagram. Press Sync to see why.`,
+  conflict: BOTH_CHANGED,
+  "conflict-invalid": BOTH_CHANGED,
+  deleted: (tab) => `${tab} was deleted outside Ordo. Press Sync to recreate it or close the tab.`,
+  blocked: UNWRITABLE,
+  "blocked-take": UNWRITABLE,
+};
 
 export function useLocalMode(deps: LocalDeps) {
   const depsRef = useRef(deps);
@@ -115,6 +136,8 @@ export function useLocalMode(deps: LocalDeps) {
 
   const baseRef = useRef<Base | null>(null);
   const busy = useRef(false);
+  const autoFlow = useRef<Promise<void> | null>(null); // the auto-sync holding `busy`, if one is
+  const autoSaid = useRef<string | null>(null); // what auto-sync last told the person, so it says it once
   const loadSeq = useRef(0); // bumped by every load; a slower one that finishes later is dropped
   const pendingAnswer = useRef<((choice: SyncChoice) => void) | null>(null);
   const labelAsked = useRef(false);
@@ -173,8 +196,9 @@ export function useLocalMode(deps: LocalDeps) {
       resolve?.(choice);
     };
 
-    /** One flow at a time; another started meanwhile is dropped. */
+    /** One flow at a time; another started meanwhile is dropped, unless it is only behind an auto-sync. */
     const run = async <T>(flow: () => Promise<T>, dropped: T): Promise<T> => {
+      if (busy.current && autoFlow.current) await autoFlow.current;
       if (busy.current) return dropped;
       busy.current = true;
       try {
@@ -329,14 +353,21 @@ export function useLocalMode(deps: LocalDeps) {
      * Write the canvas. On success the written text is the new base and its
      * documents the session's, so the next export patches what is on disk.
      * "retry" when the file moved under the write (412): decide again.
+     * `quiet` (auto-sync) says nothing on success and asks nothing on a refusal.
      */
-    const write = async (s: Local, tab: string, out: OrdoExport, pre: Precondition): Promise<boolean | "retry"> => {
+    const write = async (
+      s: Local,
+      tab: string,
+      out: OrdoExport,
+      pre: Precondition,
+      quiet = false,
+    ): Promise<boolean | "retry"> => {
       const d = depsRef.current;
       let result: api.WriteResult;
       try {
         result = await api.writeDiagramFile(s.repo, tab, out.text!, pre);
       } catch (e) {
-        d.notify(`Couldn't write ${tab}: ${explain(e)}`, "error");
+        (quiet ? sayOnce : d.notify)(`Couldn't write ${tab}: ${explain(e)}`, "error");
         return false;
       }
       if (result.ok) {
@@ -344,10 +375,14 @@ export function useLocalMode(deps: LocalDeps) {
         // depsRef again, not `d`: the session may have moved during the await.
         d.setSession({ ...depsRef.current.session, ordo: out.ordo!.doc, layout: out.layout!.doc });
         setUnsynced(false);
-        d.notify(`Synced ${tab}`, "success");
+        if (!quiet) d.notify(`Synced ${tab}`, "success");
         return true;
       }
       if (result.status === 412) return "retry";
+      if (quiet) {
+        sayOnce(`The server refused ${tab} as Ordo wrote it, so it wasn't saved. Press Sync to see why.`, "error");
+        return false;
+      }
       // The server read what Ordo wrote and refused it. exportOrdo reads its
       // own output back first, so this means the two disagree: say so.
       await ask({
@@ -498,6 +533,87 @@ export function useLocalMode(deps: LocalDeps) {
       if (tabs.join("\n") !== now.tabs.join("\n")) setState({ ...now, tabs });
     };
 
+    // --- auto-sync ----------------------------------------------------------
+
+    /** Auto-sync's notices: each one once, until a tick goes through cleanly. */
+    const sayOnce = (message: string, tone: "info" | "error" = "info") => {
+      if (autoSaid.current === message) return;
+      autoSaid.current = message;
+      depsRef.current.notify(message, tone);
+    };
+
+    /** One quiet Sync of the open diagram, `s`: see the top of the file. */
+    const autoSyncNow = async (s: Local, tab: string): Promise<void> => {
+      const base = baseRef.current;
+      if (!base || (s.status === "ready" && !settledRef.current)) return;
+      const out = s.status === "ready" ? exportNow() : null;
+      let file: DiagramFile | null;
+      try {
+        file = await api.readDiagramFile(s.repo, tab);
+      } catch (e) {
+        sayOnce(`Couldn't read ${tab}: ${explain(e)}`, "error");
+        return;
+      }
+      const now = local();
+      if (!now || now.repo !== s.repo || now.tab !== tab || baseRef.current !== base) return;
+
+      // A load replaces the canvas: not under someone typing a label, nor
+      // over an edit made while the file was being read.
+      const canLoad = () =>
+        !isTyping(document.activeElement) && (!out || canvasState(exportNow().text, base.exported) === "unchanged");
+
+      if (now.status === "invalid") {
+        if (!file) {
+          await closeTab(now, tab, `${tab} was deleted outside Ordo, so its tab is closed.`);
+          return;
+        }
+        if (file.etag === base.etag || !canLoad()) return;
+        if (applyFile(now, tab, file, { newHistory: true })) depsRef.current.notify(`Loaded ${tab}`, "success");
+        autoSaid.current = null;
+        return;
+      }
+
+      const read = file && file.etag !== base.etag ? readDiagram(file.text) : null;
+      const fileState: FileState = !file ? "deleted" : !read ? "same" : read.ok ? "changed" : "changed-invalid";
+      const action = decideSync(canvasState(out!.text, base.exported), fileState);
+      const leave = LEAVE_FOR_SYNC[action];
+      if (leave) return sayOnce(leave(tab));
+      if (action === "write") {
+        // A 412 lands on the conflict next time round.
+        if ((await write(now, tab, out!, { ifMatch: base.etag }, true)) !== true) return;
+      } else if (action === "load") {
+        if (!canLoad()) return;
+        applyFile(now, tab, file!, { newHistory: false });
+        depsRef.current.notify(`Loaded ${tab} from disk`, "info");
+      } else if (action === "close") {
+        if (!canLoad()) return;
+        await closeTab(now, tab, `${tab} was deleted outside Ordo, so its tab is closed.`);
+      }
+      autoSaid.current = null;
+    };
+
+    /** Auto-sync, when a diagram is open and nothing else is running. */
+    const autoSync = (): Promise<void> => {
+      const s = local();
+      if (busy.current || !s?.tab || (s.status !== "ready" && s.status !== "invalid")) return Promise.resolve();
+      const tab = s.tab;
+      busy.current = true;
+      const flow = (async () => {
+        try {
+          await autoSyncNow(s, tab);
+        } catch (e) {
+          // Never rejects: a Sync clicked meanwhile is waiting on it.
+          console.error(e);
+        } finally {
+          busy.current = false;
+          autoFlow.current = null;
+          void refreshTabs();
+        }
+      })();
+      autoFlow.current = flow;
+      return flow;
+    };
+
     // --- guards -------------------------------------------------------------
 
     /** Leaving the open diagram: fine when it is synced, otherwise ask. */
@@ -566,7 +682,7 @@ export function useLocalMode(deps: LocalDeps) {
       const here = currentPlace();
       const next = readPlace(window.location.search);
       if (samePlace(next, here)) return;
-      if (busy.current) {
+      if (busy.current && !autoFlow.current) {
         window.history.pushState(null, "", placeUrl(here));
         return;
       }
@@ -619,6 +735,7 @@ export function useLocalMode(deps: LocalDeps) {
       selectTab,
       createTab,
       sync,
+      autoSync,
       closeRepo,
       answer,
       unsyncedNow,
@@ -663,6 +780,15 @@ export function useLocalMode(deps: LocalDeps) {
     }
     return fns.settleNow(mine);
   }, [settleToken, nodesInitialized, empty, fns]);
+
+  // Auto-sync, while a repo is open.
+  const autoSyncMs = deps.autoSyncMs ?? AUTO_SYNC_MS;
+  const inRepo = state.mode === "local";
+  useEffect(() => {
+    if (!inRepo) return;
+    const id = setInterval(() => void fns.autoSync(), autoSyncMs);
+    return () => clearInterval(id);
+  }, [inRepo, autoSyncMs, fns]);
 
   // The unsynced dot, once the graph has been still for a moment.
   useEffect(() => {

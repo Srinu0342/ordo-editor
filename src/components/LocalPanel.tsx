@@ -63,7 +63,7 @@ export function LocalCard({
           </code>{" "}
           doesn't read as an Ordo diagram
         </h2>
-        <p style={text}>Fix the file, then press Sync to load it.</p>
+        <p style={text}>Fix the file and it loads within a few seconds, or press Sync to load it now.</p>
         <div style={{ textAlign: "left", marginTop: 12 }}>
           <DiagnosticList title={`${tab}/${DIAGRAM_FILE}`} items={diagnostics ?? []} />
         </div>
