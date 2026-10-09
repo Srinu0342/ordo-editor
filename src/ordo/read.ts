@@ -245,6 +245,8 @@ export function resolve(file: OrdoFile): ResolvedDiagram {
       from: e.from,
       to: e.to,
       ...(d.label !== undefined ? { label: d.label } : {}),
+      ...(d.textSize !== undefined ? { textSize: d.textSize } : {}),
+      ...(d.textWeight !== undefined ? { textWeight: d.textWeight } : {}),
       line,
       // A width equal to the line's own says nothing the line does not.
       ...(d.width !== undefined && d.width !== lineWidth(line) ? { width: d.width } : {}),

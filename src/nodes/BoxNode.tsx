@@ -5,6 +5,7 @@ import { drawShape, defaultSize, DEFAULT_SHAPE } from "../shapes/registry.ts";
 import { walk, labelBox } from "../render/reactWalker.tsx";
 import EditableLabel from "./EditableLabel.tsx";
 import { Anchors, useNodeTheme } from "./chrome.tsx";
+import { fontOf } from "../textStyle.ts";
 import type { OrdoEdge, OrdoNode } from "../types.ts";
 
 // ONE component for all 47 shapes. The shape is a property, the geometry comes
@@ -63,7 +64,10 @@ export default function BoxNode({
         </svg>
 
         {labels.map((slot) => (
-          <div key={slot.key} style={labelBox(slot, w, h, theme)}>
+          <div
+            key={slot.key}
+            style={labelBox({ ...slot, ...fontOf(slot, data) }, w, h, theme)}
+          >
             <EditableLabel
               value={String(data[slot.slot] ?? "")}
               onChange={(v) => setSlot(slot.slot, v)}

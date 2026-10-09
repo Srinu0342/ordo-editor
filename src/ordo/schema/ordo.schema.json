@@ -45,6 +45,8 @@
     },
     "strings": { "type": "array", "items": { "type": "string" } },
     "numbers": { "type": "array", "items": { "type": "number" } },
+    "textSize": { "type": "integer", "minimum": 8, "maximum": 72 },
+    "textWeight": { "enum": ["regular", "semibold", "bold"] },
     "marker": {
       "enum": ["none", "arrow", "open-arrow", "circle", "cross", "inheritance", "composition", "aggregation", "dependency", "er-one", "er-many", "er-zero-one", "er-zero-many", "er-one-many"]
     },
@@ -56,6 +58,8 @@
         "label": { "type": "string" },
         "shape": { "type": "string", "description": "box only" },
         "type": { "type": "string", "pattern": "^[a-z][a-z0-9-]*(/[a-z0-9][a-z0-9-]*)*$" },
+        "textSize": { "$ref": "#/$defs/textSize", "description": "box, group, text and class: the label's size in px" },
+        "textWeight": { "$ref": "#/$defs/textWeight", "description": "box, group, text and class" },
         "collapsed": { "type": "boolean", "description": "group only" },
         "members": { "$ref": "#/$defs/strings", "description": "group only" },
         "mermaid": { "type": "string", "description": "group only: the Mermaid diagram type it was imported from" },
@@ -76,6 +80,8 @@
       "additionalProperties": false,
       "properties": {
         "label": { "type": "string" },
+        "textSize": { "$ref": "#/$defs/textSize", "description": "the label's size in px; default 13" },
+        "textWeight": { "$ref": "#/$defs/textWeight", "description": "default regular" },
         "line": { "enum": ["solid", "dotted", "dashed", "thick"] },
         "width": { "type": "number", "exclusiveMinimum": 0 },
         "color": { "type": "string" },

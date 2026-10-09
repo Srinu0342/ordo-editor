@@ -259,6 +259,8 @@ function reconcileData(doc: Document, prev: ResolvedDiagram, target: ResolvedDia
     Object.fromEntries(EDGE_FIELDS.map((f) => [f, (e as unknown as Record<string, unknown>)[f]]));
   const edgeDefaults: Record<string, unknown> = {
     label: undefined,
+    textSize: undefined,
+    textWeight: undefined,
     line: DEFAULTS.line,
     width: undefined,
     color: DEFAULTS.color,

@@ -5,6 +5,7 @@ import EditableLabel from "./EditableLabel.tsx";
 import { Anchors, useNodeTheme } from "./chrome.tsx";
 import { TEXT_FONT, TEXT_PAD, TEXT_PLACEHOLDER } from "./defaults.ts";
 import { LINE_HEIGHT } from "../measure.ts";
+import { fontOf } from "../textStyle.ts";
 import type { OrdoEdge, OrdoNode } from "../types.ts";
 
 // Text with no frame. The degenerate case: there is no outline for an edge to
@@ -19,6 +20,7 @@ import type { OrdoEdge, OrdoNode } from "../types.ts";
 export default function LabelNode({ id, data, selected }: NodeProps<OrdoNode>) {
   const { setNodes } = useReactFlow<OrdoNode, OrdoEdge>();
   const theme = useNodeTheme(selected);
+  const font = fontOf(TEXT_FONT, data);
 
   const setLabel = useCallback(
     (value: string) =>
@@ -41,8 +43,8 @@ export default function LabelNode({ id, data, selected }: NodeProps<OrdoNode>) {
         justifyContent: "center",
         padding: `${TEXT_PAD[0]}px ${TEXT_PAD[1]}px`,
         fontFamily: "system-ui, sans-serif",
-        fontSize: TEXT_FONT.size,
-        fontWeight: TEXT_FONT.weight,
+        fontSize: font.size,
+        fontWeight: font.weight,
         lineHeight: LINE_HEIGHT,
         color: theme["node.ink"],
         border: `1px ${selected ? "solid" : "dashed"} ${

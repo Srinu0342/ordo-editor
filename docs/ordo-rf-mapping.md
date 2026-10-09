@@ -38,6 +38,7 @@ tube's `attach` must name an edge, or it is an `unknown-edge` error.
 | `id` | the skeleton id: any non-empty string with no control characters (`n12`, `mermaid-1/A`, `seq:head:App`, `ä`). The writer quotes what YAML would misread. |
 | `parentId` | nesting in the skeleton |
 | `data.label` | `label`. Defaults to the id for box, group, text and class; a tube or fragment has none unless given one. |
+| `data.textSize`, `data.textWeight` | `textSize` (px, 8–72) and `textWeight` (`regular`, `semibold`, `bold`) on a box, group, text or class. Absent means the font its kind (or a box's shape) draws in; the text bar never stores a value equal to that. |
 | `data.semanticType` | `type`, e.g. `store/postgres` |
 | `position` | layout `x`, `y`, rounded to integers |
 | `style.width/height`, or `width/height` after a resize | layout `w`, `h`: always for a group, never for text (a text node is as big as its text, so a `w`, `h` given one is not read), otherwise only when it differs from the size the kind (or a box's shape) is dropped at |
@@ -58,6 +59,7 @@ tube's `attach` must name an edge, or it is an `unknown-edge` error.
 | `data.markerStart`, `data.markerEnd` | `start` [`none`], `end` [`arrow`]: `none`, `arrow` (the filled head), `open-arrow`, `circle`, `cross`, `inheritance`, `composition`, `aggregation`, `dependency`, `er-one`, `er-many`, `er-zero-one`, `er-zero-many`, `er-one-many` |
 | `data.label` | `label` (`""` means none) |
 | `data.labelPlacement` | `placement`: `center`, `above`, `right` [`center`] |
+| `data.textSize`, `data.textWeight` | `textSize`, `textWeight`, as on a node [13 px, `regular`] |
 | `hidden` | `hidden` [`false`]; Mermaid's `~~~` |
 | `source`, `target` | `edges[].from`, `edges[].to` |
 | `sourceHandle`, `targetHandle` | layout `edges.<id>.from` / `.to`. The compass anchors `n`, `e`, `s`, `w` are written `top`, `right`, `bottom`, `left`; a tube's taps (`a1`, `b3`) by their own ids |

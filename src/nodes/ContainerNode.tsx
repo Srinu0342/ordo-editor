@@ -3,6 +3,8 @@ import { useReactFlow, NodeResizer } from "@xyflow/react";
 import type { NodeProps } from "@xyflow/react";
 import EditableLabel from "./EditableLabel.tsx";
 import { Anchors, useNodeTheme } from "./chrome.tsx";
+import { GROUP_FONT } from "./defaults.ts";
+import { fontOf } from "../textStyle.ts";
 import type { OrdoEdge, OrdoNode } from "../types.ts";
 
 // Holds child nodes. Not a Box with a dashed border: the containment tree, the
@@ -17,6 +19,7 @@ export default function ContainerNode({
   const { setNodes } = useReactFlow<OrdoNode, OrdoEdge>();
   const theme = useNodeTheme(selected);
   const isDropTarget = Boolean(data.isDropTarget);
+  const font = fontOf(GROUP_FONT, data);
 
   const setLabel = useCallback(
     (value: string) =>
@@ -54,12 +57,14 @@ export default function ContainerNode({
         <div
           style={{
             position: "absolute",
-            top: -12,
+            // centred a little above the border, at any size
+            top: -3,
+            transform: "translateY(-50%)",
             left: 10,
             padding: "0 6px",
             background: theme["container.band"],
-            fontSize: 14,
-            fontWeight: 600,
+            fontSize: font.size,
+            fontWeight: font.weight,
             color: theme["node.ink.muted"],
             fontFamily: "system-ui, sans-serif",
             borderRadius: 3,

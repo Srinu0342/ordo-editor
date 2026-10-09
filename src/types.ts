@@ -1,4 +1,5 @@
 import type { Edge, Node } from "@xyflow/react";
+import type { TextWeight } from "./ordo/types.ts";
 
 // The document model: what a node and an edge carry, in one place.
 //
@@ -27,6 +28,9 @@ export type Attach = {
 export type NodeData = {
   // box, container, compartment, label
   label?: string;
+  // …and its own size and weight, when not the kind's (see textStyle.ts)
+  textSize?: number;
+  textWeight?: TextWeight;
   // box: the registry key it is drawn with
   shape?: string;
 
@@ -74,6 +78,8 @@ export type LabelPlacement = "center" | "above" | "right";
 
 export type EdgeData = {
   label?: string;
+  textSize?: number;
+  textWeight?: TextWeight;
   markerStart?: string;
   markerEnd?: string;
   labelPlacement?: LabelPlacement;

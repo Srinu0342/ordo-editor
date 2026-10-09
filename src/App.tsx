@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DragEvent, PointerEvent } from "react";
 import {
   BackgroundVariant,
@@ -30,6 +30,7 @@ import Header from "./components/Header.tsx";
 import type { Project, SyncBar } from "./components/Header.tsx";
 import Landing, { OpeningCard, ProjectsCard } from "./components/Landing.tsx";
 import ImportDialog from "./components/ImportDialog.tsx";
+import TextStyle from "./components/TextStyle.tsx";
 import type { ImportDescription } from "./components/ImportDialog.tsx";
 import OrdoImportDialog from "./components/OrdoImportDialog.tsx";
 import type { OrdoImportResult } from "./components/OrdoImportDialog.tsx";
@@ -48,6 +49,7 @@ import {
   nodeSize,
   sizeOfNode,
   isUnparented,
+  baseFont,
   TubeFollower,
   TUBE_TYPE,
 } from "./nodes/index.ts";
@@ -60,7 +62,15 @@ import {
   DETACH_DIST,
 } from "./edges/attach.ts";
 import { edgeTypes, EdgeMarkers } from "./edges/index.ts";
-import { DEFAULT_EDGE_STYLE, applyEdgeStyle } from "./edgeStyle.ts";
+import { DEFAULT_EDGE_STYLE, EDGE_LABEL_FONT, applyEdgeStyle } from "./edgeStyle.ts";
+import {
+  clampTextSize,
+  fontOf,
+  summarizeText,
+  weightName,
+  withTextStyle,
+} from "./textStyle.ts";
+import type { Font, TextStyle as OwnText, TextWeight } from "./textStyle.ts";
 import type { EdgeStyle } from "./edgeStyle.ts";
 import {
   IMPORTABLE,
@@ -331,6 +341,68 @@ function Flow({
       ),
     [setEdges],
   );
+
+  // The text bar acts on every selected node that shows text, and on every
+  // selected line (a line with no text yet keeps the style for when it has).
+  const textSelection = useMemo(
+    () =>
+      summarizeText([
+        ...nodes.flatMap((n) => {
+          const base = n.selected ? baseFont(n) : null;
+          return base ? [{ base, own: n.data }] : [];
+        }),
+        ...edges
+          .filter((e) => e.selected)
+          .map((e) => ({ base: EDGE_LABEL_FONT, own: e.data })),
+      ]),
+    [nodes, edges],
+  );
+
+  // `next` says what one item's text becomes, given the font it is drawn in
+  // now. Each item is restyled from its own font, so a step keeps the
+  // differences between them.
+  const restyleText = useCallback(
+    (next: (font: Font) => OwnText) => {
+      setNodes((nds) =>
+        nds.map((n) => {
+          const base = n.selected ? baseFont(n) : null;
+          if (!base) return n;
+          return {
+            ...n,
+            data: withTextStyle(n.data, next(fontOf(base, n.data)), base),
+          };
+        }),
+      );
+      setEdges((eds) =>
+        eds.some((e) => e.selected)
+          ? eds.map((e) =>
+              e.selected
+                ? {
+                    ...e,
+                    data: withTextStyle(
+                      e.data ?? {},
+                      next(fontOf(EDGE_LABEL_FONT, e.data)),
+                      EDGE_LABEL_FONT,
+                    ),
+                  }
+                : e,
+            )
+          : eds,
+      );
+    },
+    [setNodes, setEdges],
+  );
+  const keep = (f: Font): OwnText => ({
+    textSize: f.size,
+    textWeight: weightName(f.weight),
+  });
+  const stepTextSize = (delta: number) =>
+    restyleText((f) => ({ ...keep(f), textSize: clampTextSize(f.size + delta) }));
+  const setTextSize = (size: number) =>
+    restyleText((f) => ({ ...keep(f), textSize: size }));
+  const setTextWeight = (textWeight: TextWeight) =>
+    restyleText((f) => ({ ...keep(f), textWeight }));
+  const resetText = () => restyleText(() => ({}));
 
   // absolute (canvas) rect of a node, using its measured size
   const absRect = useCallback(
@@ -1217,6 +1289,15 @@ function Flow({
           >
             {/* keeps every rider on the edge it was dropped on */}
             <TubeFollower />
+            {textSelection.count > 0 && (
+              <TextStyle
+                text={textSelection}
+                onStep={stepTextSize}
+                onSize={setTextSize}
+                onWeight={setTextWeight}
+                onReset={resetText}
+              />
+            )}
             <AlignmentGuides guides={guides} />
 
             <Background

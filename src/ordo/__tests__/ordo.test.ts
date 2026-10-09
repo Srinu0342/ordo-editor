@@ -402,6 +402,60 @@ test("a text node is as big as its text: no size on the canvas, none in the file
   assert.match(out.layout!.text, /note: \{ x: 10, y: 20 \}/);
 });
 
+const STYLED = [
+  "ordo: 1",
+  "nodes:",
+  "  - api",
+  "  - note",
+  "edges:",
+  "  - { id: e1, from: api, to: note }",
+  "data:",
+  "  nodes:",
+  "    api:",
+  "      label: API",
+  "      textSize: 20",
+  "      textWeight: bold",
+  "    note:",
+  "      kind: text",
+  "      textWeight: semibold",
+  "  edges:",
+  "    e1:",
+  "      label: calls",
+  "      textSize: 15",
+  "",
+].join("\n");
+
+test("text size and weight reach the canvas and are written back as they were", () => {
+  const result = importOrdo(STYLED);
+  assert.deepEqual(result.diagnostics, []);
+  const api = result.nodes.find((n) => n.id === "api")!;
+  assert.equal(api.data.textSize, 20);
+  assert.equal(api.data.textWeight, "bold");
+  assert.equal(result.nodes.find((n) => n.id === "note")!.data.textWeight, "semibold");
+  assert.equal(result.edges[0].data?.textSize, 15);
+
+  const out = exportOrdo(result.nodes, result.edges, { name: "s", ordo: result.ordo, layout: result.layout });
+  assert.deepEqual(out.diagnostics, []);
+  assert.equal(out.ordo!.text, STYLED);
+
+  // a restyle on the canvas changes those lines and no others
+  const nodes = result.nodes.map((n) => (n.id === "api" ? { ...n, data: { ...n.data, textSize: 24 } } : n));
+  const again = exportOrdo(nodes, result.edges, { name: "s", ordo: result.ordo, layout: result.layout });
+  assert.equal(again.ordo!.text, STYLED.replace("textSize: 20", "textSize: 24"));
+});
+
+test("text style is checked: a known weight, a size in range, on a kind that shows text", () => {
+  const codes = (text: string) => readDiagram(text).diagnostics.map((d) => [d.code, d.message]);
+  assert.deepEqual(codes(STYLED.replace("textWeight: bold", "textWeight: heavy")), [
+    ["schema", "data.nodes.api.textWeight: must be equal to one of the allowed values"],
+  ]);
+  assert.equal(codes(STYLED.replace("textSize: 20", "textSize: 200"))[0][0], "schema");
+  assert.deepEqual(
+    codes("ordo: 1\nnodes: [t]\ndata:\n  nodes:\n    t: { kind: tube, textSize: 14 }\n"),
+    [["kind-field", 'tube "t" has no field "textSize"']],
+  );
+});
+
 // ---------------------------------------------------------------------------
 // One file: the structure, `---`, the layout
 

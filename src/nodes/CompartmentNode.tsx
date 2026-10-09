@@ -4,6 +4,8 @@ import { useReactFlow, NodeResizer } from "@xyflow/react";
 import type { NodeProps } from "@xyflow/react";
 import EditableLabel from "./EditableLabel.tsx";
 import { Anchors, useNodeTheme } from "./chrome.tsx";
+import { CLASS_FONT } from "./defaults.ts";
+import { fontOf } from "../textStyle.ts";
 import type { NodeData, OrdoEdge, OrdoNode } from "../types.ts";
 
 // Stacked sections with independent content — UML class, ER entity, record.
@@ -18,7 +20,6 @@ import type { NodeData, OrdoEdge, OrdoNode } from "../types.ts";
 
 const rowStyle: CSSProperties = {
   padding: "3px 9px",
-  fontSize: 14,
   fontFamily: "system-ui, sans-serif",
   display: "flex",
 };
@@ -31,6 +32,14 @@ export default function CompartmentNode({
   const { setNodes } = useReactFlow<OrdoNode, OrdoEdge>();
   const theme = useNodeTheme(selected);
   const sections = data.sections ?? [["field: type"], ["method()"]];
+  // The name is drawn in the class's font; its rows a px smaller, and regular
+  // unless the class has a weight of its own.
+  const font = fontOf(CLASS_FONT, data);
+  const rowFont: CSSProperties = {
+    ...rowStyle,
+    fontSize: font.size - 1,
+    fontWeight: data.textWeight ? font.weight : 400,
+  };
 
   const patch = useCallback(
     (fn: (data: NodeData) => NodeData) =>
@@ -77,8 +86,8 @@ export default function CompartmentNode({
           style={{
             ...rowStyle,
             justifyContent: "center",
-            fontWeight: 700,
-            fontSize: 15,
+            fontWeight: font.weight,
+            fontSize: font.size,
             padding: "5px 9px",
             borderBottom: `1.5px solid ${theme["node.stroke"]}`,
             background: theme["node.shade"],
@@ -109,7 +118,7 @@ export default function CompartmentNode({
             }}
           >
             {rows.map((row, ri) => (
-              <div key={ri} style={rowStyle}>
+              <div key={ri} style={rowFont}>
                 <EditableLabel
                   value={row}
                   onChange={(v) => setRow(si, ri, v)}

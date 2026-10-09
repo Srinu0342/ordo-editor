@@ -1,8 +1,12 @@
 import { TUBE_TYPE, TUBE_SIZE } from "./tube.ts";
 import { FRAGMENT_TYPE } from "./fragment.ts";
 import type { CSSProperties } from "react";
-import { defaultSize, DEFAULT_SHAPE } from "../shapes/registry.ts";
+import { defaultSize, drawShape, DEFAULT_SHAPE } from "../shapes/registry.ts";
+import { OP, flatten } from "../ops.ts";
+import type { LabelOp } from "../ops.ts";
 import { measureText } from "../measure.ts";
+import { fontOf } from "../textStyle.ts";
+import type { Font } from "../textStyle.ts";
 import type { NodeData, OrdoNode, Size, XY } from "../types.ts";
 
 // What a node IS before anything draws it: the defaults each palette pick
@@ -35,14 +39,48 @@ export const TEXT_PAD: [y: number, x: number] = [3, 5];
 export const TEXT_PLACEHOLDER = "text"; // shown, and sized, while it is empty
 const TEXT_BORDER = 1; // drawn only when selected, always there to keep the size
 
-export const textSize = (text: string): Size => {
-  const { width, height } = measureText(text || TEXT_PLACEHOLDER, TEXT_FONT);
+export const textSize = (text: string, font: Font = TEXT_FONT): Size => {
+  const { width, height } = measureText(text || TEXT_PLACEHOLDER, font);
   const [py, px] = TEXT_PAD;
   return [
     Math.ceil(width) + 2 * (px + TEXT_BORDER),
     Math.ceil(height) + 2 * (py + TEXT_BORDER),
   ];
 };
+
+// What the other kinds draw their text in. A class's rows run a px smaller
+// than its name, and regular unless the class is given a weight.
+export const CLASS_FONT = { size: 15, weight: 700 };
+export const GROUP_FONT = { size: 14, weight: 600 };
+
+// The font a shape's label slot is drawn in, or null for a shape with no slot
+// (a junction, a fork bar). Read from the registry at the shape's own size.
+const slotFont = (shape: string): Font | null => {
+  const [w, h] = defaultSize(shape);
+  const slot = flatten(drawShape(shape, w, h)).find(
+    (op): op is LabelOp => op.op === OP.LABEL,
+  );
+  return slot ? { size: slot.size, weight: slot.weight } : null;
+};
+
+/**
+ * The font a node's text is drawn in before its own textSize/textWeight, or
+ * null for a node that shows no text (a tube, a fragment, a box with no slot).
+ */
+export function baseFont(node: Pick<OrdoNode, "type" | "data">): Font | null {
+  switch (node.type) {
+    case "box":
+      return slotFont(node.data?.shape ?? DEFAULT_SHAPE);
+    case "label":
+      return TEXT_FONT;
+    case "compartment":
+      return CLASS_FONT;
+    case "container":
+      return GROUP_FONT;
+    default:
+      return null;
+  }
+}
 
 export type TypeDefaults = {
   // The size it is dropped at — or, for an intrinsic type, the estimate used
@@ -123,7 +161,7 @@ export const nodeKind = (node: OrdoNode) =>
 export const sizeOfNode = (node: OrdoNode): Size => {
   const [w, h] =
     node.type === "label"
-      ? textSize(String(node.data?.label ?? ""))
+      ? textSize(String(node.data?.label ?? ""), fontOf(TEXT_FONT, node.data))
       : nodeSize(nodeKind(node));
   return [
     node.width ?? node.style?.width ?? node.measured?.width ?? w,

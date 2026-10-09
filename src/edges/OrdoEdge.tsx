@@ -12,6 +12,7 @@ import { defaultEnds, nodeBox } from "./faces.ts";
 import EditableLabel from "../nodes/EditableLabel.tsx";
 import { useCanvasTheme } from "../nodes/chrome.tsx";
 import { EDGE_LABEL_FONT, inkOf } from "../edgeStyle.ts";
+import { fontOf } from "../textStyle.ts";
 // Aliased: in this file `OrdoEdge` is the component.
 import type {
   LabelPlacement,
@@ -101,6 +102,7 @@ function OrdoEdge({
   const me = markerUrl(data?.markerEnd);
   const label = data?.label ?? "";
   const place = PLACE[data?.labelPlacement ?? "center"] ?? PLACE.center;
+  const font = fontOf(EDGE_LABEL_FONT, data);
 
   const theme = useCanvasTheme();
   const stroke = inkOf(style?.stroke, theme);
@@ -140,8 +142,8 @@ function OrdoEdge({
             style={{
               position: "absolute",
               transform: place(labelX, labelY),
-              fontSize: EDGE_LABEL_FONT.size,
-              fontWeight: EDGE_LABEL_FONT.weight,
+              fontSize: font.size,
+              fontWeight: font.weight,
               fontFamily: "system-ui, sans-serif",
               pointerEvents: "all",
               // edges inside a subflow get an elevated z-index, which would

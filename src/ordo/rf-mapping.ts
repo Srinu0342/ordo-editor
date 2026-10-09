@@ -3,7 +3,8 @@ import { SHAPES as REGISTRY, defaultSize } from "../shapes/registry.ts";
 import { SHAPE_ALIASES } from "../shapes/aliases.ts";
 import { LINE_TYPES, applyEdgeStyle, newEdge } from "../edgeStyle.ts";
 import type { EdgeStyle } from "../edgeStyle.ts";
-import { NODE_TYPE_DEFAULTS, textSize } from "../nodes/defaults.ts";
+import { NODE_TYPE_DEFAULTS, TEXT_FONT, textSize } from "../nodes/defaults.ts";
+import { fontOf } from "../textStyle.ts";
 import { TUBE_TYPE } from "../nodes/tube.ts";
 import { FRAGMENT_TYPE } from "../nodes/fragment.ts";
 import type { NodeData, OrdoEdge, OrdoNode } from "../types.ts";
@@ -11,6 +12,7 @@ import {
   DEFAULTS,
   EDGE_ROUTES,
   PLACEMENTS,
+  TEXT_WEIGHTS,
   lineWidth,
   type NodeFields,
   type OrdoBox,
@@ -22,6 +24,7 @@ import {
   type OrdoRoute,
   type ResolvedEdge,
   type ResolvedNode,
+  type TextWeight,
 } from "./types.ts";
 
 // The one module that knows how this editor spells things on the canvas.
@@ -46,6 +49,8 @@ import {
 //                 structure (`attach`), the rest is where it sits (layout)
 //   edge route    edge.type (edges/routers.ts)
 //   edge label    data.label, "" for none; data.labelPlacement
+//   text style    data.textSize / data.textWeight on a node or an edge, as
+//                 the file spells them; absent means the kind's own font
 //   markers       data.markerStart / data.markerEnd, edges/markers.tsx keys
 //   line          style: stroke colour, width and a dash pattern
 //   handles       the compass anchors n, e, s, w (nodes/chrome.tsx), named
@@ -144,10 +149,12 @@ export function kindSize(kind: OrdoKind, shape: string): { w: number; h: number 
  * The room a node takes before React Flow has drawn it, for spacing: the size
  * its kind draws at, except a text node's, which is its text's.
  */
-export function roomFor(n: Pick<ResolvedNode, "kind" | "isGroup" | "shape" | "label">): { w: number; h: number } {
+export function roomFor(
+  n: Pick<ResolvedNode, "kind" | "isGroup" | "shape" | "label" | "textSize" | "textWeight">,
+): { w: number; h: number } {
   const kind = kindOf(n);
   if (kind !== "text") return kindSize(kind, n.shape);
-  const [w, h] = textSize(n.label ?? "");
+  const [w, h] = textSize(n.label ?? "", fontOf(TEXT_FONT, n));
   return { w, h };
 }
 
@@ -207,6 +214,8 @@ const DASHES: Record<OrdoLine, string> = {
 
 /** The fields a node carries as they are, between the file and node.data. `attach` is rebuilt, not copied. */
 const CARRIED = [
+  "textSize",
+  "textWeight",
   "collapsed",
   "members",
   "mermaid",
@@ -264,7 +273,12 @@ export function rfEdge(e: ResolvedEdge, handles?: OrdoHandles): OrdoEdge {
     target: e.to,
     ...(handles?.from !== undefined ? { sourceHandle: toRfHandle(handles.from) } : {}),
     ...(handles?.to !== undefined ? { targetHandle: toRfHandle(handles.to) } : {}),
-    data: { label: e.label ?? "", ...(placement !== "center" ? { labelPlacement: placement } : {}) },
+    data: {
+      label: e.label ?? "",
+      ...(placement !== "center" ? { labelPlacement: placement } : {}),
+      ...(e.textSize !== undefined ? { textSize: e.textSize } : {}),
+      ...(e.textWeight !== undefined ? { textWeight: e.textWeight } : {}),
+    },
     ...(e.hidden ? { hidden: true } : {}),
     ...(handles?.z !== undefined ? { zIndex: handles.z } : {}),
   };
@@ -338,8 +352,14 @@ export function readEdge(e: Edge): Omit<ResolvedEdge, "id" | "from" | "to" | "la
   const placement = (PLACEMENTS as readonly string[]).includes(String(d.labelPlacement))
     ? (d.labelPlacement as OrdoPlacement)
     : DEFAULTS.placement;
+  const textSize = num(d.textSize);
+  const textWeight = (TEXT_WEIGHTS as readonly string[]).includes(String(d.textWeight))
+    ? (d.textWeight as TextWeight)
+    : undefined;
   return {
     label: d.label,
+    ...(textSize !== undefined ? { textSize } : {}),
+    ...(textWeight !== undefined ? { textWeight } : {}),
     line,
     ...(strokeWidth !== undefined && strokeWidth !== lineWidth(line) ? { width: strokeWidth } : {}),
     color: typeof style.stroke === "string" ? style.stroke : DEFAULTS.color,

@@ -49,6 +49,12 @@ export type OrdoMarker = (typeof MARKERS)[number];
 export const PLACEMENTS = ["center", "above", "right"] as const;
 export type OrdoPlacement = (typeof PLACEMENTS)[number];
 
+/** How heavy a label's text is, when it is not what its kind draws in. */
+export const TEXT_WEIGHTS = ["regular", "semibold", "bold"] as const;
+export type TextWeight = (typeof TEXT_WEIGHTS)[number];
+export const TEXT_SIZE_MIN = 8;
+export const TEXT_SIZE_MAX = 72;
+
 // ---------- structure document: structure and content ----------
 
 /** Stable key for a node or edge. Never derived from a label, never rewritten by the canvas. */
@@ -62,6 +68,11 @@ export interface OrdoNodeData {
   label?: string; // default: the node id (a tube or fragment has no label unless given one)
   shape?: string; // box only; default: DEFAULTS.shape
   type?: string; // semantic type, e.g. "store/postgres"; carried through, no rendering effect
+
+  // box, group, text, class: the label's own size in px and weight; default:
+  // what the kind (or a box's shape) draws its text in
+  textSize?: number;
+  textWeight?: TextWeight;
 
   // group
   collapsed?: boolean; // a subgraph Mermaid sent collapsed…
@@ -87,6 +98,8 @@ export interface OrdoNodeData {
 
 export interface OrdoEdgeData {
   label?: string; // default: no label
+  textSize?: number; // default: the line's own, 13px
+  textWeight?: TextWeight; // default: regular
   line?: OrdoLine; // default: solid
   width?: number; // default: the line's own (3 for thick, else 1.5)
   color?: string; // default: DEFAULTS.color
@@ -146,6 +159,8 @@ export interface OrdoLayoutFile {
 /** The fields a node carries beyond its identity, exactly as in the file (no defaults: present or absent). */
 export type NodeFields = Pick<
   OrdoNodeData,
+  | "textSize"
+  | "textWeight"
   | "collapsed"
   | "members"
   | "mermaid"
@@ -176,6 +191,8 @@ export interface ResolvedEdge {
   from: OrdoId;
   to: OrdoId;
   label?: string;
+  textSize?: number;
+  textWeight?: TextWeight;
   line: OrdoLine;
   width?: number; // only when it is not the line's own
   color?: string; // default DEFAULTS.color
@@ -248,10 +265,10 @@ export const LABELLED: ReadonlySet<OrdoKind> = new Set(["box", "group", "text", 
 
 /** The data fields each kind may carry, beyond label and type (which every kind may). */
 export const KIND_FIELDS: Record<OrdoKind, readonly (keyof OrdoNodeData)[]> = {
-  box: ["kind", "shape"],
-  group: ["collapsed", "members", "mermaid"],
-  text: ["kind"],
-  class: ["kind", "sections"],
+  box: ["kind", "shape", "textSize", "textWeight"],
+  group: ["collapsed", "members", "mermaid", "textSize", "textWeight"],
+  text: ["kind", "textSize", "textWeight"],
+  class: ["kind", "sections", "textSize", "textWeight"],
   tube: ["kind", "slots", "taps", "variant", "attach", "align"],
   fragment: ["kind", "operator", "guards", "dividers", "fill"],
 };
@@ -262,6 +279,8 @@ export const NODE_FIELD_ORDER = [
   "label",
   "shape",
   "type",
+  "textSize",
+  "textWeight",
   "collapsed",
   "members",
   "mermaid",
@@ -279,6 +298,8 @@ export const NODE_FIELD_ORDER = [
 
 export const EDGE_FIELD_ORDER = [
   "label",
+  "textSize",
+  "textWeight",
   "line",
   "width",
   "color",
