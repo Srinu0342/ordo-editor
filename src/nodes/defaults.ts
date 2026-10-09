@@ -2,6 +2,7 @@ import { TUBE_TYPE, TUBE_SIZE } from "./tube.ts";
 import { FRAGMENT_TYPE } from "./fragment.ts";
 import type { CSSProperties } from "react";
 import { defaultSize, DEFAULT_SHAPE } from "../shapes/registry.ts";
+import { measureText } from "../measure.ts";
 import type { NodeData, OrdoNode, Size, XY } from "../types.ts";
 
 // What a node IS before anything draws it: the defaults each palette pick
@@ -25,9 +26,32 @@ export const UNPARENTED_TYPES = new Set<string | undefined>([TUBE_TYPE]);
 export const isUnparented = (node?: Pick<OrdoNode, "type">) =>
   UNPARENTED_TYPES.has(node?.type);
 
+// A text node has no frame, so the only edge it has is its words: it is as big
+// as its text, and its anchors and selection ring sit just outside it rather
+// than at the side of a box nobody can see. React Flow measures it; this is
+// what LabelNode draws it in, and its size before it has been measured.
+export const TEXT_FONT = { size: 16, weight: 400 };
+export const TEXT_PAD: [y: number, x: number] = [3, 5];
+export const TEXT_PLACEHOLDER = "text"; // shown, and sized, while it is empty
+const TEXT_BORDER = 1; // drawn only when selected, always there to keep the size
+
+export const textSize = (text: string): Size => {
+  const { width, height } = measureText(text || TEXT_PLACEHOLDER, TEXT_FONT);
+  const [py, px] = TEXT_PAD;
+  return [
+    Math.ceil(width) + 2 * (px + TEXT_BORDER),
+    Math.ceil(height) + 2 * (py + TEXT_BORDER),
+  ];
+};
+
 export type TypeDefaults = {
+  // The size it is dropped at — or, for an intrinsic type, the estimate used
+  // until React Flow has measured it.
   size: Size;
   data: NodeData;
+  // Sized by its own content: it is given no size, so nothing can hold it
+  // bigger than what it shows.
+  intrinsic?: boolean;
   // anything but the size, which `size` holds
   style?: Omit<CSSProperties, "width" | "height">;
   zIndex?: number;
@@ -39,7 +63,7 @@ export const NODE_TYPE_DEFAULTS: Record<string, TypeDefaults> = {
     size: [190, 118],
     data: { label: "ClassName", sections: [["field: type"], ["method()"]] },
   },
-  label: { size: [80, 26], data: { label: "text" } },
+  label: { size: textSize("text"), data: { label: "text" }, intrinsic: true },
   [TUBE_TYPE]: { size: TUBE_SIZE, data: { slots: 3 } },
   [FRAGMENT_TYPE]: {
     size: [320, 180],
@@ -72,7 +96,7 @@ export function makeNode(
     id,
     type,
     position,
-    style: { width: w, height: h, ...spec?.style },
+    style: { ...(spec?.intrinsic ? {} : { width: w, height: h }), ...spec?.style },
     data: isShape
       ? { shape: kind ?? DEFAULT_SHAPE, label: "", ...data }
       : { ...spec.data, ...data },
@@ -94,8 +118,15 @@ export const nodeKind = (node: OrdoNode) =>
 
 // Best available size for a node that may not be mounted yet — a freshly
 // pasted node has to be hit-tested against groups before React Flow has
-// measured it, so fall back through the explicit style to the registry.
-export const sizeOfNode = (node: OrdoNode): Size => [
-  node.width ?? node.style?.width ?? nodeSize(nodeKind(node))[0],
-  node.height ?? node.style?.height ?? nodeSize(nodeKind(node))[1],
-];
+// measured it, so fall back through the explicit style and the measurement to
+// the registry. A text node has no registry size: its words are its size.
+export const sizeOfNode = (node: OrdoNode): Size => {
+  const [w, h] =
+    node.type === "label"
+      ? textSize(String(node.data?.label ?? ""))
+      : nodeSize(nodeKind(node));
+  return [
+    node.width ?? node.style?.width ?? node.measured?.width ?? w,
+    node.height ?? node.style?.height ?? node.measured?.height ?? h,
+  ];
+};

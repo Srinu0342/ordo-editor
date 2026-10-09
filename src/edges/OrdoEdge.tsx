@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import {
   BaseEdge,
   EdgeLabelRenderer,
@@ -11,7 +11,7 @@ import { markerUrl } from "./markers.tsx";
 import { defaultEnds, nodeBox } from "./faces.ts";
 import EditableLabel from "../nodes/EditableLabel.tsx";
 import { useCanvasTheme } from "../nodes/chrome.tsx";
-import { inkOf } from "../edgeStyle.ts";
+import { EDGE_LABEL_FONT, inkOf } from "../edgeStyle.ts";
 // Aliased: in this file `OrdoEdge` is the component.
 import type {
   LabelPlacement,
@@ -79,6 +79,11 @@ function OrdoEdge({
     targetPosition: ends.target?.position ?? targetPosition,
   });
 
+  // A line with no text shows no pill, so there is nothing on it to
+  // double-click: a double-click on the line itself opens the editor, and a
+  // pill that is still empty when the editor closes goes away again.
+  const [editing, setEditing] = useState(false);
+
   const { setEdges } = useReactFlow<OrdoNode, OrdoEdgeType>();
   const setLabel = useCallback(
     (label: string) =>
@@ -102,35 +107,41 @@ function OrdoEdge({
 
   return (
     <>
-      {selected && (
-        <path
-          d={edgePath}
-          fill="none"
-          stroke={theme["edge.stroke.selected"]}
-          strokeOpacity={0.35}
-          strokeWidth={Number(style?.strokeWidth ?? 1) + HALO_SPREAD}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          pointerEvents="none"
+      <g onDoubleClick={() => setEditing(true)}>
+        {selected && (
+          <path
+            d={edgePath}
+            fill="none"
+            stroke={theme["edge.stroke.selected"]}
+            strokeOpacity={0.35}
+            strokeWidth={Number(style?.strokeWidth ?? 1) + HALO_SPREAD}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            pointerEvents="none"
+          />
+        )}
+        <BaseEdge
+          id={id}
+          path={edgePath}
+          style={stroke === style?.stroke ? style : { ...style, stroke }}
+          markerStart={ms}
+          markerEnd={me}
         />
-      )}
-      <BaseEdge
-        id={id}
-        path={edgePath}
-        style={stroke === style?.stroke ? style : { ...style, stroke }}
-        markerStart={ms}
-        markerEnd={me}
-      />
+      </g>
 
-      {label !== "" && (
+      {(label !== "" || editing) && (
         <EdgeLabelRenderer>
           <EditableLabel
             value={label}
             onChange={setLabel}
+            editing={editing}
+            onEditingChange={setEditing}
+            placeholder="text"
             style={{
               position: "absolute",
               transform: place(labelX, labelY),
-              fontSize: 11,
+              fontSize: EDGE_LABEL_FONT.size,
+              fontWeight: EDGE_LABEL_FONT.weight,
               fontFamily: "system-ui, sans-serif",
               pointerEvents: "all",
               // edges inside a subflow get an elevated z-index, which would

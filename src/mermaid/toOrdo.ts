@@ -2,6 +2,7 @@ import { SHAPES, DEFAULT_SHAPE } from "../shapes/registry.ts";
 import { SHAPE_ALIASES as ALIASES } from "../shapes/aliases.ts";
 import { DEFAULT_EDGE_STYLE, applyEdgeStyle } from "../edgeStyle.ts";
 import { handlesFor } from "../edges/faces.ts";
+import { textSize } from "../nodes/defaults.ts";
 import type { LayoutData } from "mermaid";
 import type { MermaidLayout, Subgraph } from "./extractor.ts";
 import type { OrdoEdge, OrdoNode, XY } from "../types.ts";
@@ -218,11 +219,19 @@ export function toOrdo(payload: MermaidLayout | LayoutData | null | undefined): 
     const type = isGroup ? "container" : shape === AS_LABEL ? "label" : "box";
     const label = n.label ?? "";
 
+    // A text node is as big as its text (see nodes/defaults.ts), so it gets
+    // no size, only a place: centred where Mermaid drew its box.
+    const text = type === "label";
+    const [tw, th] = text ? textSize(label) : [width, height];
+
     return {
       id: n.id,
       type,
-      position,
-      style: { width, height },
+      position: {
+        x: position.x + (width - tw) / 2,
+        y: position.y + (height - th) / 2,
+      },
+      style: text ? {} : { width, height },
       data:
         type === "box"
           ? { shape: shape!, label }

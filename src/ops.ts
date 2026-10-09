@@ -147,6 +147,11 @@ export const line = (
   ...o,
 });
 
+// What a label slot draws in unless its shape says otherwise. Mermaid's own
+// size, so a box it laid out around its text holds the same text here. The
+// sequence importer sizes its boxes with it too.
+export const LABEL_FONT = { size: 16, weight: 600 };
+
 // A text box, not a text run. Geometry only — the renderer decides whether it
 // becomes an SVG <text> or an editable HTML overlay, which is what lets the
 // canvas have double-click editing while the headless walker still draws text.
@@ -164,8 +169,8 @@ export const label = (
   h,
   align: "center",
   valign: "middle",
-  size: 14,
-  weight: 600,
+  size: LABEL_FONT.size,
+  weight: LABEL_FONT.weight,
   fill: INK,
   slot: "label",
   ...o,

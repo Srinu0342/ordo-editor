@@ -99,7 +99,7 @@ ordo-layout: 1
 nodes:
   customer: { x: 0, y: 160 }
   web: { x: 160, y: 184 }
-  note: { x: 140, y: 300, w: 200, h: 26 }
+  note: { x: 140, y: 300 }
   vpc: { x: 400, y: 40, w: 620, h: 430 }
   gateway: { x: 30, y: 144 }
   services: { x: 230, y: 50, w: 360, h: 340 }

@@ -18,7 +18,7 @@ import type { NodeData, OrdoEdge, OrdoNode } from "../types.ts";
 
 const rowStyle: CSSProperties = {
   padding: "3px 9px",
-  fontSize: 12.5,
+  fontSize: 14,
   fontFamily: "system-ui, sans-serif",
   display: "flex",
 };
@@ -78,7 +78,7 @@ export default function CompartmentNode({
             ...rowStyle,
             justifyContent: "center",
             fontWeight: 700,
-            fontSize: 13.5,
+            fontSize: 15,
             padding: "5px 9px",
             borderBottom: `1.5px solid ${theme["node.stroke"]}`,
             background: theme["node.shade"],

@@ -54,11 +54,11 @@ export default function ContainerNode({
         <div
           style={{
             position: "absolute",
-            top: -11,
+            top: -12,
             left: 10,
             padding: "0 6px",
             background: theme["container.band"],
-            fontSize: 12,
+            fontSize: 14,
             fontWeight: 600,
             color: theme["node.ink.muted"],
             fontFamily: "system-ui, sans-serif",

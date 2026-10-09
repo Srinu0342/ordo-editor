@@ -84,14 +84,21 @@ const Row = ({ children, gap = 4 }: { children: ReactNode; gap?: number }) => (
   <div style={{ display: "flex", alignItems: "center", gap }}>{children}</div>
 );
 
+// A line's text is content rather than style, so it is only offered for one
+// line at a time: `text` is that line's, and null when there is not exactly
+// one selected. Double-clicking the line on the canvas edits the same text.
 export default function LineStyle({
   value,
   onChange,
   selectedCount,
+  text = null,
+  onTextChange,
 }: {
   value: EdgeStyle;
   onChange: (patch: Partial<EdgeStyle>) => void;
   selectedCount: number; // lines selected on the canvas
+  text?: string | null;
+  onTextChange?: (text: string) => void;
 }) {
   const theme = useCanvasTheme();
   const activeType = lineTypeOf(value.dash);
@@ -114,8 +121,22 @@ export default function LineStyle({
       >
         {selectedCount
           ? `Styling ${selectedCount} selected line${selectedCount > 1 ? "s" : ""}`
-          : "Style for the next line you draw. Select lines to restyle them."}
+          : "Style for the next line you draw. Select lines to restyle them; double-click one to give it text."}
       </p>
+
+      {text !== null && (
+        <>
+          <div style={label}>Text</div>
+          <input
+            id="ordo-line-text"
+            type="text"
+            value={text}
+            placeholder="Text on the line"
+            onChange={(e) => onTextChange?.(e.target.value)}
+            style={{ ...selectStyle, width: "100%", boxSizing: "border-box", padding: "0 8px", cursor: "text" }}
+          />
+        </>
+      )}
 
       <div style={label}>Colour</div>
       <Row gap={5}>

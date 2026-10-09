@@ -319,6 +319,19 @@ function Flow({
     [edgeStyle, setEdges],
   );
 
+  // The panel edits the text of a line only when it is the one selected.
+  const selectedEdge =
+    selectedEdgeCount === 1 ? edges.find((e) => e.selected) : undefined;
+  const setSelectedEdgeLabel = useCallback(
+    (label: string) =>
+      setEdges((eds) =>
+        eds.map((e) =>
+          e.selected ? { ...e, data: { ...e.data, label } } : e,
+        ),
+      ),
+    [setEdges],
+  );
+
   // absolute (canvas) rect of a node, using its measured size
   const absRect = useCallback(
     (id: string): Rect | null => {
@@ -1158,6 +1171,8 @@ function Flow({
           edgeStyle={edgeStyle}
           onEdgeStyleChange={changeEdgeStyle}
           selectedEdgeCount={selectedEdgeCount}
+          lineText={selectedEdge ? (selectedEdge.data?.label ?? "") : null}
+          onLineTextChange={setSelectedEdgeLabel}
           onInspect={() => console.log("Details:", toObject())}
         />
 

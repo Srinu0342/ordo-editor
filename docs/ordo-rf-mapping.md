@@ -40,7 +40,7 @@ tube's `attach` must name an edge, or it is an `unknown-edge` error.
 | `data.label` | `label`. Defaults to the id for box, group, text and class; a tube or fragment has none unless given one. |
 | `data.semanticType` | `type`, e.g. `store/postgres` |
 | `position` | layout `x`, `y`, rounded to integers |
-| `style.width/height`, or `width/height` after a resize | layout `w`, `h`: always for a group, otherwise only when it differs from the size the kind (or a box's shape) is dropped at |
+| `style.width/height`, or `width/height` after a resize | layout `w`, `h`: always for a group, never for text (a text node is as big as its text, so a `w`, `h` given one is not read), otherwise only when it differs from the size the kind (or a box's shape) is dropped at |
 | `zIndex` | layout `z`, when it is not the kind's own (a fragment's is 1) |
 | `data.rotation` | layout `rotation` |
 | `data.attach` | structure `attach` (which edge) plus layout `t`, `shift`, `angle` (where on it) |

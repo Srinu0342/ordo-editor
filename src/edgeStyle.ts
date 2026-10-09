@@ -26,6 +26,10 @@ export const STROKE_SWATCHES = [
 
 export const STROKE_WEIGHTS = [1, 1.5, 2, 3, 4];
 
+// A line's text: the pill OrdoEdge draws it in, and the font the sequence
+// importer measures a message with.
+export const EDGE_LABEL_FONT = { size: 13, weight: 400 };
+
 // `dash` is an SVG stroke-dasharray, so "" means solid.
 export const LINE_TYPES = [
   { key: "solid", label: "Solid", dash: "" },

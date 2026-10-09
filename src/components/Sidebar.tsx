@@ -176,6 +176,8 @@ export default function Sidebar({
   edgeStyle,
   onEdgeStyleChange,
   selectedEdgeCount,
+  lineText = null,
+  onLineTextChange,
   onInspect,
 }: {
   panel: Panel;
@@ -183,6 +185,9 @@ export default function Sidebar({
   edgeStyle: EdgeStyle;
   onEdgeStyleChange: (patch: Partial<EdgeStyle>) => void;
   selectedEdgeCount: number;
+  // the text of the one selected line; null unless exactly one is selected
+  lineText?: string | null;
+  onLineTextChange?: (text: string) => void;
   onInspect?: () => void;
 }) {
   const route = edgeStyle.route;
@@ -411,7 +416,13 @@ export default function Sidebar({
           </>
         ) : (
           <>
-            <LineStyle value={edgeStyle} onChange={onEdgeStyleChange} selectedCount={selectedEdgeCount} />
+            <LineStyle
+              value={edgeStyle}
+              onChange={onEdgeStyleChange}
+              selectedCount={selectedEdgeCount}
+              text={lineText}
+              onTextChange={onLineTextChange}
+            />
 
             <div style={{ ...sectionTitle, marginTop: 14 }}>Routing</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>

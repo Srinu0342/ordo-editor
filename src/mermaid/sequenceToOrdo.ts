@@ -1,9 +1,13 @@
 import { measureText as defaultMeasure, wrapText } from "../measure.ts";
 import type { Font, Measure, TextSize } from "../measure.ts";
-import { flatten } from "../ops.ts";
+import { LABEL_FONT, flatten } from "../ops.ts";
 import type { LabelOp } from "../ops.ts";
-import { drawShape } from "../shapes/registry.ts";
-import { DEFAULT_EDGE_STYLE, applyEdgeStyle } from "../edgeStyle.ts";
+import { NOTE_FONT, drawShape } from "../shapes/registry.ts";
+import {
+  DEFAULT_EDGE_STYLE,
+  EDGE_LABEL_FONT,
+  applyEdgeStyle,
+} from "../edgeStyle.ts";
 import { TUBE_TYPE, TRACK } from "../nodes/tube.ts";
 import {
   FRAGMENT_TYPE,
@@ -49,10 +53,9 @@ import type { Attach, NodeData, OrdoEdge, SizedNode } from "../types.ts";
 const n2 = (v: number) => Math.round(v * 100) / 100;
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
-// The fonts each piece is drawn in.
-const ACTOR_FONT = { size: 14, weight: 600 }; // Box's label slot
-const MESSAGE_FONT = { size: 11, weight: 400 }; // OrdoEdge's label pill
-const NOTE_FONT = { size: 13, weight: 400 }; // the note shape's label slot
+// The fonts each piece is drawn in, taken from what draws it.
+const ACTOR_FONT = LABEL_FONT; // Box's label slot
+const MESSAGE_FONT = EDGE_LABEL_FONT; // OrdoEdge's label pill
 
 // OrdoEdge's pill: 8px padding plus a 1px border either side, 2px plus 1px
 // above and below, and a 1.4 line height.

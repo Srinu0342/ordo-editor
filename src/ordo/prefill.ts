@@ -1,6 +1,6 @@
 import dagre from "@dagrejs/dagre";
-import { GROUP_HEADER, GROUP_PAD, kindSize } from "./rf-mapping.ts";
-import { DEFAULTS, type OrdoBox, type OrdoKind, type OrdoLayoutFile, type ResolvedDiagram } from "./types.ts";
+import { GROUP_HEADER, GROUP_PAD, roomFor } from "./rf-mapping.ts";
+import type { OrdoBox, OrdoLayoutFile, ResolvedDiagram } from "./types.ts";
 
 const GAP = 40;
 
@@ -24,12 +24,7 @@ export function prefill(diagram: ResolvedDiagram, layout: OrdoLayoutFile | null)
     if (siblings) siblings.push(n.id);
     else children.set(n.parent, [n.id]);
   }
-  const fallbackSize = new Map(
-    diagram.nodes.map((n) => [
-      n.id,
-      kindSize(n.kind ?? (n.isGroup ? "group" : (DEFAULTS.kind as OrdoKind)), n.shape),
-    ]),
-  );
+  const fallbackSize = new Map(diagram.nodes.map((n) => [n.id, roomFor(n)]));
 
   const pos = new Map<string, { x: number; y: number }>();
   const size = new Map<string, { w: number; h: number }>();
@@ -37,7 +32,8 @@ export function prefill(diagram: ResolvedDiagram, layout: OrdoLayoutFile | null)
     if (!Object.hasOwn(authored, n.id)) continue; // a layout orphan is ignored
     const b = authored[n.id];
     pos.set(n.id, { x: b.x, y: b.y });
-    if (b.w !== undefined && b.h !== undefined) size.set(n.id, { w: b.w, h: b.h });
+    // A text node is as big as its text, whatever size the file gives it.
+    if (b.w !== undefined && b.h !== undefined && n.kind !== "text") size.set(n.id, { w: b.w, h: b.h });
   }
   const sizeOf = (id: string) => size.get(id) ?? fallbackSize.get(id)!;
 

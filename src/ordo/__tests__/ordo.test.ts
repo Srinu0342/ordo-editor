@@ -20,7 +20,7 @@ import { connectionEdge, rfEdge, rfNode } from "../rf-mapping.ts";
 import { resolve } from "../read.ts";
 import { parseAllDocuments } from "yaml";
 import { TUBE_TYPE } from "../../nodes/tube.ts";
-import { makeNode } from "../../nodes/defaults.ts";
+import { makeNode, sizeOfNode, textSize } from "../../nodes/defaults.ts";
 import { SHAPE_KEYS } from "../../shapes/registry.ts";
 import { DEFAULT_EDGE_STYLE, newEdge } from "../../edgeStyle.ts";
 import type { OrdoLayoutFile, ResolvedDiagram } from "../types.ts";
@@ -370,6 +370,36 @@ test("a canvas drawn with the palette and onConnect exports, and reads back", ()
   const back = importOrdo(out.ordo!.text, out.layout!.text);
   assert.deepEqual(canon(fromReactFlow(back.nodes, back.edges).diagram), canon(fromReactFlow(nodes, edges).diagram));
   assert.deepEqual(back.nodes.find((n) => n.id === "n3")?.style, { width: 200, height: 120 });
+});
+
+test("a text node is as big as its text: no size on the canvas, none in the file", () => {
+  const at = { x: 40, y: 80 };
+  const dropped = makeNode("label", { id: "n1", position: at });
+  assert.deepEqual(dropped, rfNode({ id: "n1", parent: null, isGroup: false, kind: "text", label: "text", shape: "rect" }, at));
+  assert.deepEqual(dropped.style, {});
+  // until React Flow measures it, its size is its text's
+  assert.deepEqual(sizeOfNode(dropped), textSize("text"));
+  assert.ok(textSize("Guest checkout is allowed")[0] > textSize("text")[0]);
+
+  // a size the file gives one is not read, and the export after it drops it
+  const file = [
+    "ordo: 1",
+    "nodes: [note]",
+    "data:",
+    "  nodes:",
+    "    note: { kind: text, label: Guest checkout is allowed }",
+    "---",
+    "ordo-layout: 1",
+    "nodes:",
+    "  note: { x: 10, y: 20, w: 200, h: 26 }",
+    "",
+  ].join("\n");
+  const result = importOrdo(file);
+  assert.deepEqual(result.diagnostics, []);
+  assert.deepEqual(result.nodes[0].style, {});
+  const out = exportOrdo(result.nodes, result.edges, emptySession());
+  assert.deepEqual(out.diagnostics, []);
+  assert.match(out.layout!.text, /note: \{ x: 10, y: 20 \}/);
 });
 
 // ---------------------------------------------------------------------------

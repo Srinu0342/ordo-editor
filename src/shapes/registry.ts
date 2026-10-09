@@ -42,10 +42,15 @@ const pad = (w: number, h: number, l = 0.12, t = 0.16) => [
   n(h * (1 - t * 2)),
 ];
 
-// A plain centred label filling the node minus a small inset. Shapes whose
+// A plain centred label filling the node minus a small inset — small, so a
+// long label runs nearly to the outline before it is cut. Shapes whose
 // outline eats into the middle (diamond, triangle) pass a tighter box.
-const mid = (w: number, h: number, inx = 0.1, iny = 0.14) =>
+const mid = (w: number, h: number, inx = 0.06, iny = 0.1) =>
   label(n(w * inx), n(h * iny), n(w * (1 - inx * 2)), n(h * (1 - iny * 2)));
+
+// A note's text is body copy, not a title: lighter than a label slot's. The
+// sequence importer sizes its notes with it.
+export const NOTE_FONT = { size: 15, weight: 400 };
 
 // ---------------------------------------------------------------------------
 // Terminators and junctions
@@ -651,7 +656,7 @@ const ANNO: ShapeSet = {
           fill: "none",
           width: 1.25,
         }),
-        label(10, 6, n(w - 20), n(h - 12), { size: 13, weight: 400 }),
+        label(10, 6, n(w - 20), n(h - 12), NOTE_FONT),
       ];
     },
   },

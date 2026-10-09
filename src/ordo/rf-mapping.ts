@@ -3,7 +3,7 @@ import { SHAPES as REGISTRY, defaultSize } from "../shapes/registry.ts";
 import { SHAPE_ALIASES } from "../shapes/aliases.ts";
 import { LINE_TYPES, applyEdgeStyle, newEdge } from "../edgeStyle.ts";
 import type { EdgeStyle } from "../edgeStyle.ts";
-import { NODE_TYPE_DEFAULTS } from "../nodes/defaults.ts";
+import { NODE_TYPE_DEFAULTS, textSize } from "../nodes/defaults.ts";
 import { TUBE_TYPE } from "../nodes/tube.ts";
 import { FRAGMENT_TYPE } from "../nodes/fragment.ts";
 import type { NodeData, OrdoEdge, OrdoNode } from "../types.ts";
@@ -36,7 +36,9 @@ import {
 //                 class ↔ compartment, tube ↔ tube, fragment ↔ fragment
 //   size          style.width / style.height, where the editor puts it. A
 //                 resize makes React Flow write width/height on the node
-//                 itself, and those win (it draws node.width ?? style)
+//                 itself, and those win (it draws node.width ?? style). A
+//                 text node has none: it is as big as its text, so a size a
+//                 file gives one is not read and never written
 //   kind defaults NODE_TYPE_DEFAULTS (nodes/defaults.ts) and the shape
 //                 registry: a size, a style, a zIndex the palette gives every
 //                 node of the kind, and so need not be written down
@@ -138,6 +140,17 @@ export function kindSize(kind: OrdoKind, shape: string): { w: number; h: number 
   return spec ? { w: spec.size[0], h: spec.size[1] } : leafSize(shape);
 }
 
+/**
+ * The room a node takes before React Flow has drawn it, for spacing: the size
+ * its kind draws at, except a text node's, which is its text's.
+ */
+export function roomFor(n: Pick<ResolvedNode, "kind" | "isGroup" | "shape" | "label">): { w: number; h: number } {
+  const kind = kindOf(n);
+  if (kind !== "text") return kindSize(kind, n.shape);
+  const [w, h] = textSize(n.label ?? "");
+  return { w, h };
+}
+
 // ---------------------------------------------------------------------------
 // Handles, markers and lines
 // ---------------------------------------------------------------------------
@@ -235,7 +248,7 @@ export function rfNode(n: ResolvedNode, box: OrdoBox): OrdoNode {
     id: n.id,
     type: TYPE_OF_KIND[kind],
     position: { x: box.x, y: box.y },
-    style: { width: size.w, height: size.h, ...spec?.style },
+    style: { ...(spec?.intrinsic ? {} : { width: size.w, height: size.h }), ...spec?.style },
     data,
     ...(z !== undefined ? { zIndex: z } : {}),
     ...(n.parent !== null ? { parentId: n.parent } : {}),
