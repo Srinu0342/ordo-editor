@@ -25,6 +25,10 @@ import type { Graph, OrdoEdge, OrdoNode } from "./types.ts";
 // one step however long it runs, and a key pressed partway through (Shift, to
 // snap a rotation) does not split it. Undo and redo wait for the pointer too:
 // rewinding a node mid-drag would only have the drag write it straight back.
+//
+// `epoch` marks the canvas becoming a different diagram (another tab in local
+// mode). When it changes, history starts over from the graph just committed:
+// the steps behind it belong to a diagram that is no longer on screen.
 
 // Input types nobody types into. Every other <input> takes text.
 const NOT_TEXT = new Set([
@@ -62,9 +66,11 @@ export function useHistory({
   edges,
   setNodes,
   setEdges,
+  epoch = 0,
 }: Graph & {
   setNodes: Dispatch<SetStateAction<OrdoNode[]>>;
   setEdges: Dispatch<SetStateAction<OrdoEdge[]>>;
+  epoch?: number;
 }) {
   const live = useRef<Graph>({ nodes, edges });
   live.current = { nodes, edges };
@@ -100,6 +106,16 @@ export function useHistory({
     },
     [checkpoint, stack, setNodes, setEdges],
   );
+
+  // After the commit that brought the new diagram in, so the baseline is it
+  // rather than the one it replaced. Skipped on mount: nothing to forget yet.
+  const lastEpoch = useRef(epoch);
+  useEffect(() => {
+    if (lastEpoch.current === epoch) return;
+    lastEpoch.current = epoch;
+    stack.clear();
+    baseline.current = live.current;
+  }, [epoch, stack]);
 
   useEffect(() => {
     const press = (event: PointerEvent) => {

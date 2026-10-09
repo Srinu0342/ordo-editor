@@ -1,0 +1,180 @@
+ordo: 1
+nodes:
+  - mermaid-1:
+      - mermaid-1/seq:head:Traveller
+      - mermaid-1/seq:foot:Traveller
+      - mermaid-1/seq:head:Gate
+      - mermaid-1/seq:foot:Gate
+      - mermaid-1/seq:head:Pass
+      - mermaid-1/seq:foot:Pass
+      - mermaid-1/seq:head:Wallet
+      - mermaid-1/seq:foot:Wallet
+      - mermaid-1/seq:track:Traveller
+      - mermaid-1/seq:track:Gate
+      - mermaid-1/seq:track:Pass
+      - mermaid-1/seq:track:Wallet
+      - mermaid-1/seq:bar:Gate:1
+      - mermaid-1/seq:bar:Pass:0
+      - mermaid-1/seq:note:2
+      - mermaid-1/seq:note:5
+      - mermaid-1/seq:note:8
+      - mermaid-1/seq:note:11
+edges:
+  - { id: mermaid-1/seq:life:Traveller, from: mermaid-1/seq:head:Traveller, to: mermaid-1/seq:foot:Traveller }
+  - { id: mermaid-1/seq:life:Gate, from: mermaid-1/seq:head:Gate, to: mermaid-1/seq:foot:Gate }
+  - { id: mermaid-1/seq:life:Pass, from: mermaid-1/seq:head:Pass, to: mermaid-1/seq:foot:Pass }
+  - { id: mermaid-1/seq:life:Wallet, from: mermaid-1/seq:head:Wallet, to: mermaid-1/seq:foot:Wallet }
+  - { id: mermaid-1/seq:msg:0, from: mermaid-1/seq:track:Traveller, to: mermaid-1/seq:bar:Gate:1 }
+  - { id: mermaid-1/seq:msg:3, from: mermaid-1/seq:bar:Gate:1, to: mermaid-1/seq:bar:Pass:0 }
+  - { id: mermaid-1/seq:msg:6, from: mermaid-1/seq:bar:Pass:0, to: mermaid-1/seq:track:Wallet }
+  - { id: mermaid-1/seq:msg:7, from: mermaid-1/seq:track:Wallet, to: mermaid-1/seq:bar:Pass:0 }
+  - { id: mermaid-1/seq:msg:9, from: mermaid-1/seq:bar:Pass:0, to: mermaid-1/seq:bar:Gate:1 }
+  - { id: mermaid-1/seq:msg:12, from: mermaid-1/seq:bar:Gate:1, to: mermaid-1/seq:track:Traveller }
+data:
+  nodes:
+    mermaid-1:
+      label: mermaid1
+      mermaid: sequence
+    mermaid-1/seq:head:Traveller:
+      label: Traveller
+      shape: person
+    mermaid-1/seq:foot:Traveller:
+      label: Traveller
+      shape: person
+    mermaid-1/seq:head:Gate:
+      label: Lounge Gate
+    mermaid-1/seq:foot:Gate:
+      label: Lounge Gate
+    mermaid-1/seq:head:Pass:
+      label: Pass Service
+    mermaid-1/seq:foot:Pass:
+      label: Pass Service
+    mermaid-1/seq:head:Wallet:
+      label: Wallet API
+    mermaid-1/seq:foot:Wallet:
+      label: Wallet API
+    mermaid-1/seq:track:Traveller:
+      kind: tube
+      taps: [ 37, 429 ]
+      variant: track
+      attach: mermaid-1/seq:life:Traveller
+    mermaid-1/seq:track:Gate:
+      kind: tube
+      taps: []
+      variant: track
+      attach: mermaid-1/seq:life:Gate
+    mermaid-1/seq:track:Pass:
+      kind: tube
+      taps: []
+      variant: track
+      attach: mermaid-1/seq:life:Pass
+    mermaid-1/seq:track:Wallet:
+      kind: tube
+      taps: [ 213, 253 ]
+      variant: track
+      attach: mermaid-1/seq:life:Wallet
+    mermaid-1/seq:bar:Gate:1:
+      kind: tube
+      taps: [ 8, 96, 312, 400 ]
+      attach: mermaid-1/seq:life:Gate
+    mermaid-1/seq:bar:Pass:0:
+      kind: tube
+      taps: [ 8, 96, 136, 224 ]
+      attach: mermaid-1/seq:life:Pass
+    mermaid-1/seq:note:2:
+      label: Reads barcode and flight number
+      shape: note
+    mermaid-1/seq:note:5:
+      label: Tier and partner rules
+      shape: note
+    mermaid-1/seq:note:8:
+      label: Cached for 10 minutes
+      shape: note
+    mermaid-1/seq:note:11:
+      label: Waits at the desk
+      shape: note
+  edges:
+    mermaid-1/seq:life:Traveller:
+      line: dashed
+      width: 1
+      color: "#94a3b8"
+      end: none
+      route: straight
+    mermaid-1/seq:life:Gate:
+      line: dashed
+      width: 1
+      color: "#94a3b8"
+      end: none
+      route: straight
+    mermaid-1/seq:life:Pass:
+      line: dashed
+      width: 1
+      color: "#94a3b8"
+      end: none
+      route: straight
+    mermaid-1/seq:life:Wallet:
+      line: dashed
+      width: 1
+      color: "#94a3b8"
+      end: none
+      route: straight
+    mermaid-1/seq:msg:0:
+      label: Scan boarding pass
+      route: straight
+      placement: above
+    mermaid-1/seq:msg:3:
+      label: Check entitlement
+      route: straight
+      placement: above
+    mermaid-1/seq:msg:6:
+      label: Look up linked card
+      route: straight
+      placement: above
+    mermaid-1/seq:msg:7:
+      label: Card benefits
+      line: dashed
+      route: straight
+      placement: above
+    mermaid-1/seq:msg:9:
+      label: Entitled (guest allowed)
+      line: dashed
+      route: straight
+      placement: above
+    mermaid-1/seq:msg:12:
+      label: Doors open
+      line: dashed
+      route: straight
+      placement: above
+---
+ordo-layout: 1
+nodes:
+  mermaid-1: { x: 0, y: 0, w: 913, h: 650, z: -2000 }
+  mermaid-1/seq:head:Traveller: { x: 146, y: 32, w: 120, h: 65 }
+  mermaid-1/seq:foot:Traveller: { x: 146, y: 561, w: 120, h: 65 }
+  mermaid-1/seq:head:Gate: { x: 314, y: 32, w: 146, h: 65 }
+  mermaid-1/seq:foot:Gate: { x: 314, y: 561, w: 146, h: 65 }
+  mermaid-1/seq:head:Pass: { x: 508, y: 32, w: 147, h: 65 }
+  mermaid-1/seq:foot:Pass: { x: 508, y: 561, w: 147, h: 65 }
+  mermaid-1/seq:head:Wallet: { x: 766, y: 32, w: 123, h: 65 }
+  mermaid-1/seq:foot:Wallet: { x: 766, y: 561, w: 123, h: 65 }
+  mermaid-1/seq:track:Traveller: { x: 204, y: 100, w: 4, h: 458, t: 0.5, angle: 90 }
+  mermaid-1/seq:track:Gate: { x: 385, y: 100, w: 4, h: 458, t: 0.5, angle: 90 }
+  mermaid-1/seq:track:Pass: { x: 580, y: 100, w: 4, h: 458, t: 0.5, angle: 90 }
+  mermaid-1/seq:track:Wallet: { x: 826, y: 100, w: 4, h: 458, t: 0.5, angle: 90 }
+  mermaid-1/seq:bar:Gate:1: { x: 380, y: 129, w: 14, h: 408, t: 0.508734, angle: 90 }
+  mermaid-1/seq:bar:Pass:0: { x: 575, y: 217, w: 14, h: 232, t: 0.508734, angle: 90 }
+  mermaid-1/seq:note:2: { x: 242, y: 149, w: 290, h: 36 }
+  mermaid-1/seq:note:5: { x: 599, y: 237, w: 198, h: 36 }
+  mermaid-1/seq:note:8: { x: 560, y: 365, w: 290, h: 36 }
+  mermaid-1/seq:note:11: { x: 24, y: 453, w: 165, h: 36 }
+edges:
+  mermaid-1/seq:life:Traveller: { from: bottom, to: top }
+  mermaid-1/seq:life:Gate: { from: bottom, to: top }
+  mermaid-1/seq:life:Pass: { from: bottom, to: top }
+  mermaid-1/seq:life:Wallet: { from: bottom, to: top }
+  mermaid-1/seq:msg:0: { from: b0, to: a0, z: 2 }
+  mermaid-1/seq:msg:3: { from: b1, to: a0, z: 2 }
+  mermaid-1/seq:msg:6: { from: b1, to: a0, z: 2 }
+  mermaid-1/seq:msg:7: { from: a1, to: b2, z: 2 }
+  mermaid-1/seq:msg:9: { from: a3, to: b2, z: 2 }
+  mermaid-1/seq:msg:12: { from: a3, to: b1, z: 2 }

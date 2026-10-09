@@ -23,7 +23,7 @@ import type {
   OnNodesChange,
   XYPosition,
 } from "@xyflow/react";
-import { ToastContainer } from "react-toastify";
+import { ToastContainer, toast } from "react-toastify";
 
 import Sidebar from "./components/Sidebar.tsx";
 import Toolbar from "./components/Toolbar.tsx";
@@ -32,6 +32,11 @@ import type { ImportDescription } from "./components/ImportDialog.tsx";
 import OrdoImportDialog from "./components/OrdoImportDialog.tsx";
 import type { OrdoImportResult } from "./components/OrdoImportDialog.tsx";
 import ViewYamlDialog from "./components/ViewYamlDialog.tsx";
+import RepoPickerDialog from "./components/RepoPickerDialog.tsx";
+import SyncDialog from "./components/SyncDialog.tsx";
+import LocalPanel from "./components/LocalPanel.tsx";
+import TabBar from "./components/TabBar.tsx";
+import type { LocalBar } from "./components/Toolbar.tsx";
 import AlignmentGuides from "./components/AlignmentGuides.tsx";
 import type { Panel } from "./components/Sidebar.tsx";
 import { alignRect, GUIDE_SNAP_PX } from "./alignment.ts";
@@ -82,6 +87,9 @@ import { ThemeContext, useCanvasTheme } from "./nodes/chrome.tsx";
 import { detectKind, emptySession, idMinter, mintId } from "./ordo/index.ts";
 import type { OrdoSession } from "./ordo/index.ts";
 import { connectionEdge } from "./ordo/rf-mapping.ts";
+import { useLocalMode } from "./local/useLocalMode.ts";
+import type { LocalDeps } from "./local/useLocalMode.ts";
+import { download } from "./local/download.ts";
 import type { Attach, OrdoEdge, OrdoNode, Rect, XY } from "./types.ts";
 
 // Every id in play, nodes and edges together: the Ordo format keeps the two in
@@ -103,9 +111,9 @@ const FIT_ALL = "\u0000all";
 // dialog raises as a toast. Text that is not Mermaid at all has no type to
 // warn about; its label says so.
 const describeMermaid = (text: string): ImportDescription => {
-  // An Ordo .yml file is YAML, not Mermaid; say where it goes instead.
+  // An Ordo .yaml file is YAML, not Mermaid; say where it goes instead.
   if (detectKind(text))
-    return { ok: false, label: "This is an Ordo .yml file — use Import  Ordo YAML", warning: null };
+    return { ok: false, label: "This is an Ordo .yaml file — use Import  Ordo YAML", warning: null };
   const found = detectDiagram(text);
   return {
     ok: Boolean(found.family),
@@ -201,8 +209,54 @@ function Flow({
 
   // Undo and redo, kept as diffs between states of the graph. Every write lands
   // in these two lists, whoever made it, so history watches them rather than
-  // each writer.
-  const { undo, redo } = useHistory({ nodes, edges, setNodes, setEdges });
+  // each writer. The epoch moves when the canvas becomes another diagram (a
+  // tab or repo switch in local mode), and history starts over from it.
+  const [epoch, setEpoch] = useState(0);
+  const { undo, redo } = useHistory({ nodes, edges, setNodes, setEdges, epoch });
+  const startNewHistory = useCallback(() => setEpoch((e) => e + 1), []);
+
+  // After an import the viewport is fitted to it once EVERY new node has been
+  // measured. A fit fires on the first measurement it sees and frames only the
+  // nodes measured by then — and a tube re-measuring its own handles gets in
+  // first, so an early fit frames one lifeline and leaves the rest off-screen.
+  const nodesInitialized = useNodesInitialized();
+  const fitPending = useRef<string | null>(null);
+  useEffect(() => {
+    const id = fitPending.current;
+    if (!id || !nodesInitialized) return;
+    fitPending.current = null;
+    fitView(id === FIT_ALL ? { padding: 0.2 } : { nodes: [{ id }], padding: 0.2 });
+  }, [nodesInitialized, fitView]);
+
+  // Local mode puts a whole diagram on the canvas at once: a file loaded into
+  // a tab. An empty one has nothing to frame, and a fit left pending would
+  // jump the view on the first node drawn.
+  const replaceCanvas = useCallback(
+    (nds: OrdoNode[], eds: OrdoEdge[]) => {
+      setNodes(nds);
+      setEdges(eds);
+      fitPending.current = nds.length ? FIT_ALL : null;
+    },
+    [setNodes, setEdges],
+  );
+
+  const notify = useCallback<LocalDeps["notify"]>((message, tone = "info") => {
+    toast[tone](message, { toastId: `ordo-local-${message}`, autoClose: tone === "error" ? 6000 : 2200 });
+  }, []);
+
+  // Which repo and diagram the canvas is, and Sync. Nothing here in free-form.
+  const local = useLocalMode({
+    nodes,
+    edges,
+    nodesInitialized,
+    replaceCanvas,
+    session,
+    setSession,
+    startNewHistory,
+    download,
+    notify,
+  });
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   // Last pointer position over the canvas, in flow coordinates. Null whenever
   // the pointer is outside, which is what makes "paste where I'm pointing"
@@ -715,9 +769,17 @@ function Flow({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
-      if (isTyping(event.target)) return; // a label being edited owns its keys
-
       const key = event.key.toLowerCase();
+
+      // Sync, from anywhere, a label being typed included: never the browser's
+      // own Save dialog, which would save the page rather than the diagram.
+      if (key === "s" && !event.shiftKey) {
+        event.preventDefault();
+        if (local.isLocal()) void local.sync();
+        return;
+      }
+
+      if (isTyping(event.target)) return; // a label being edited owns its keys
 
       // Shift turns undo into redo. Both wait out a held pointer, and close an
       // edit still open before they move (see useHistory).
@@ -775,20 +837,9 @@ function Flow({
     setEdges,
     undo,
     redo,
+    local.isLocal,
+    local.sync,
   ]);
-
-  // After an import the viewport is fitted to it once EVERY new node has been
-  // measured. A fit fires on the first measurement it sees and frames only the
-  // nodes measured by then — and a tube re-measuring its own handles gets in
-  // first, so an early fit frames one lifeline and leaves the rest off-screen.
-  const nodesInitialized = useNodesInitialized();
-  const fitPending = useRef<string | null>(null);
-  useEffect(() => {
-    const id = fitPending.current;
-    if (!id || !nodesInitialized) return;
-    fitPending.current = null;
-    fitView(id === FIT_ALL ? { padding: 0.2 } : { nodes: [{ id }], padding: 0.2 });
-  }, [nodesInitialized, fitView]);
 
   // Where the next import lands: to the right of everything already on the
   // canvas, top-aligned with it, so diagrams queue up side by side instead of
@@ -839,27 +890,32 @@ function Flow({
         ...nds.map((n) => (n.selected ? { ...n, selected: false } : n)),
         ...grouped.map((n) => (n.id === id ? { ...n, selected: true } : n)),
       ]);
-      setSession((s) => ({ ...s, ordo: null, layout: null }));
+      // In free-form the import starts a new diagram, so the last file's
+      // documents go. In local mode they are the file's baseline: the next
+      // Sync patches them, keeping the file's comments and order (P16).
+      if (!local.isLocal()) setSession((s) => ({ ...s, ordo: null, layout: null }));
       setEdges((eds) => [
         ...eds.map((e) => (e.selected ? { ...e, selected: false } : e)),
         ...wired,
       ]);
       fitPending.current = id;
     },
-    [setNodes, setEdges, besideContent],
+    [setNodes, setEdges, besideContent, local.isLocal],
   );
 
   // An Ordo import REPLACES the canvas (one undo step, like any other write),
   // becomes the session the next View Ordo YAML patches, and is framed once every
   // node has been measured.
   const onOrdoImport = useCallback(
-    ({ nodes: nds, edges: eds, ordo, layout, name }: OrdoImportResult) => {
+    ({ nodes: nds, edges: eds, ordo, layout, style, name }: OrdoImportResult) => {
       setNodes(nds);
       setEdges(eds);
-      setSession({ name, ordo, layout });
+      // In local mode the canvas is still the open tab's, whatever the
+      // imported file was called; Sync writes it there.
+      setSession((s) => ({ name: local.isLocal() ? s.name : name, ordo, layout, style }));
       fitPending.current = FIT_ALL;
     },
-    [setNodes, setEdges],
+    [setNodes, setEdges, local.isLocal],
   );
 
   const onOrdoExported = useCallback(
@@ -966,6 +1022,31 @@ function Flow({
     pointerRef.current = null;
   }, []);
 
+  // Local mode's corner of the toolbar.
+  const ls = local.state;
+  const localBar: LocalBar | undefined =
+    ls.mode === "local"
+      ? {
+          crumb: [local.label, ...ls.repo.split("/").filter(Boolean)],
+          tab: ls.tab,
+          status:
+            ls.status === "ready"
+              ? !local.settled
+                ? "loading"
+                : local.syncing
+                  ? "syncing"
+                  : local.unsynced
+                    ? "unsynced"
+                    : "up-to-date"
+              : ls.status,
+          canSync: !local.syncing && ((ls.status === "ready" && local.settled) || ls.status === "invalid"),
+          onSync: () => void local.sync(),
+          onLeave: () => void local.goFree(),
+        }
+      : undefined;
+  const cover =
+    ls.mode === "local" && (ls.status === "empty" || ls.status === "invalid" || ls.status === "error") ? ls.status : null;
+
   return (
     <div
       style={{
@@ -987,7 +1068,17 @@ function Flow({
         viewYamlRef={viewYamlRef}
         scheme={scheme}
         onToggleScheme={onToggleScheme}
+        onOpenRepo={() => setPickerOpen(true)}
+        local={localBar}
       />
+
+      <RepoPickerDialog
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onOpen={(repo) => void local.openRepo(repo)}
+      />
+
+      {local.question && <SyncDialog question={local.question} onChoice={local.answer} />}
 
       <OrdoImportDialog
         open={yamlImportOpen}
@@ -1028,6 +1119,20 @@ function Flow({
         >
           {/* marker <defs> mounted once; edges reference them by url(#id) */}
           <EdgeMarkers />
+
+          {ls.mode === "local" && cover && (
+            <LocalPanel
+              kind={cover}
+              repo={ls.repo}
+              tab={ls.tab}
+              message={ls.error}
+              diagnostics={ls.diagnostics}
+              tabs={ls.tabs}
+              onCreate={local.createTab}
+              onOpenRepo={() => setPickerOpen(true)}
+              onFree={() => void local.goFree()}
+            />
+          )}
 
           <ReactFlow
             nodes={nodes}
@@ -1072,6 +1177,16 @@ function Flow({
           </ReactFlow>
         </div>
       </div>
+
+      {ls.mode === "local" && ls.status !== "error" && (
+        <TabBar
+          tabs={ls.tabs}
+          active={ls.tab}
+          unsynced={local.unsynced}
+          onSelect={(name) => void local.selectTab(name)}
+          onCreate={local.createTab}
+        />
+      )}
     </div>
   );
 }

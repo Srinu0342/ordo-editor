@@ -1,3 +1,6 @@
 node_modules
 
 dist
+
+# Your own settings; .env.sample is the template that is committed.
+.env

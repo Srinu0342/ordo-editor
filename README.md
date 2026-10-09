@@ -9,9 +9,10 @@ you can edit.
 Built on [React Flow](https://reactflow.dev), with a headless SVG renderer that
 draws the same shapes outside the browser.
 
-> **Status: early.** The canvas, the node and edge library, and Mermaid import
-> all work. Saving does not exist yet: the Ordo file format (`.yml`) is still being
-> designed, so reloading the page gives you a blank canvas.
+> **Status: early.** The canvas, the node and edge library, Mermaid import and
+> the Ordo file format all work. Ordo runs in two modes: **free-form**, where you
+> draw and download a `.yaml` file, and **local repo mode**, where diagrams live in
+> a repo's `.ordo/` folder and a Sync button keeps the canvas and the files in step.
 
 ## Features
 
@@ -57,6 +58,39 @@ In a Markdown file, Ordo imports the first ` ```mermaid ` block. A front-matter
 `title:` names the group the diagram lands in. Each import arrives as one
 selected group, placed to the right of whatever is already on the canvas.
 
+## Two modes
+
+### Free-form
+
+Open http://localhost:5173/ and draw. **View Ordo YAML** shows the canvas as an
+Ordo file, which you can copy or **Download** as `<name>.yaml`. **Import Ordo
+YAML** opens one again. Nothing leaves the browser.
+
+### Local repo mode
+
+**Open repo** picks a folder under the workspace root (your home folder by
+default; see [Running](#running)). The repo and the open diagram go in the URL,
+so a reload or a bookmark comes back to the same place:
+
+```
+http://localhost:5173/?source=local&repo=code/payments-api&tab=checkout
+```
+
+- Each diagram is one file, `<repo>/.ordo/<name>/ordo.yaml`, and shows as a tab
+  at the bottom of the canvas. `+` creates a new one; `.ordo/` is created with
+  the first diagram, so opening a repo writes nothing.
+- **Sync** (or `⌘S`) is manual and two-way. If only the canvas changed it writes
+  the file; if only the file changed (an agent, `git pull`) it loads it. If both
+  changed it asks: keep yours, take the file's, or download yours. It never
+  overwrites a file it hasn't seen.
+- A save keeps the file's own indentation, and a drag changes only lines after
+  the `---`, so diffs stay small.
+- Leaving a diagram with unsynced edits asks first.
+- Ordo never runs git. Commit `.ordo/` like any other folder.
+
+One Ordo process serves every repo under the root, and each browser tab can
+have a different repo open.
+
 ## Getting started
 
 You need Node.js `^20.19.0` or `>=22.12.0`, the versions Vite supports.
@@ -68,17 +102,63 @@ npm install
 npm run dev
 ```
 
-Then open the URL Vite prints (http://localhost:5173 by default).
+Then open http://localhost:5173.
 
 ### Scripts
 
 | Command             | What it does |
 | ------------------- | ------------ |
-| `npm run dev`       | Start the Vite dev server with hot reload |
+| `npm run dev`       | Start the server with Vite inside it, with hot reload |
 | `npm run build`     | Typecheck, then build a production bundle into `dist/` |
+| `npm start`         | Serve the production bundle and the API |
 | `npm run preview`   | Serve the production bundle locally |
 | `npm test`          | Run the test suite with Node's built-in test runner (through `tsx`) |
 | `npm run typecheck` | Run `tsc` without emitting files |
+
+## Running
+
+Ordo is a local tool. It has no login, so it only answers on this machine.
+
+### From a clone
+
+```bash
+npm install
+npm run build
+npm start                      # http://localhost:5173
+```
+
+The repo picker starts at your home folder. To open repos from somewhere else,
+set the workspace root in `.env` at the top of the clone:
+
+```bash
+cp .env.sample .env      # then set ORDO_WORKSPACE=~/code in it
+```
+
+`.env.sample` lists every setting (`ORDO_WORKSPACE`, `PORT`, `HOST`). The server
+reads `.env` when it starts, so restart it after a change. A variable set in
+the shell wins over the file, so `ORDO_WORKSPACE=~/notes npm start` works for
+a one-off.
+
+On macOS the first listing of Desktop, Documents or Downloads may ask for your
+terminal to get access to them. If it is refused, the picker says it can't read
+that folder. You can allow it under System Settings › Privacy & Security ›
+Files and Folders.
+
+### With Docker
+
+```bash
+docker build -t ordo .
+docker run --rm -p 127.0.0.1:5173:5173 \
+  -v ~/code:/workspace/code \
+  -v ~/Desktop/personal-projects:/workspace/personal-projects \
+  ordo
+```
+
+Each `-v` mounts a folder of repos under `/workspace`, the root inside the
+container. Keep the `127.0.0.1:` in `-p`: without it Docker publishes the port
+on every network interface, and anyone who can reach your machine could read
+and write the mounted repos. On Linux, add `--user "$(id -u):$(id -g)"` so the
+files Ordo writes belong to you.
 
 ## Keyboard shortcuts
 
@@ -93,6 +173,7 @@ count in the toolbar to see this list.
 | `⌘C` / `⌘X` / `⌘V`   | Copy / cut / paste at the pointer |
 | `⌘D`                 | Duplicate |
 | `⌘Z` / `⇧⌘Z`         | Undo / redo |
+| `⌘S`                 | Sync (local repo mode) |
 | Delete / Backspace   | Delete the selection |
 | Double-click a label | Edit it |
 
@@ -156,6 +237,11 @@ dependency.
 ## Project layout
 
 ```
+server/
+├── index.ts             One process: the editor, /api and /mcp
+├── api.ts               Local repo API: host and origin checks, routes
+├── workspace.ts         Workspace root and path rules
+└── diagrams.ts          .ordo/<name>/ordo.yaml: reads, hash-checked atomic writes
 src/
 ├── App.tsx              Canvas: drag and drop, grouping, clipboard, shortcuts
 ├── ops.ts               Op-list types and builders
@@ -165,7 +251,9 @@ src/
 ├── edges/               Edge component, routers, markers, edge attachment
 ├── render/              React and headless SVG walkers
 ├── mermaid/             Type detection, flowchart and sequence importers
-├── components/          Toolbar, palette sidebar, import dialog, guides
+├── components/          Toolbar, palette, dialogs, repo picker, tab bar
+├── ordo/                The Ordo file format: read, validate, write
+├── local/               Local repo mode: URL, API client, sync decision
 ├── history.ts           Undo/redo as diffs (pure)
 └── useHistory.ts        Decides where each undo step starts and ends
 ```
@@ -175,13 +263,11 @@ run the real Mermaid parser under jsdom.
 
 ## Roadmap
 
-The planning notes are in [`ordo-workstreams.md`](ordo-workstreams.md). Next:
+Local repo mode's design and build plan is in
+[`OrdoInteraction.md`](OrdoInteraction.md). Next:
 
-- **The Ordo file format (`.yml`).** Diagrams as text, with layout kept apart from
-  structure so that dragging a node produces a small diff. Saving and loading
-  depend on this.
-- **The engine.** Parse and serialise Ordo `.yml` files, with a byte-for-byte round
-  trip.
+- **Renaming and deleting tabs** in Ordo. Today you do that with git or by hand.
+- **Hosted mode**, with GitHub as the repo.
 - **More Mermaid importers:** class, state, ER and C4.
 
 Exporting to Mermaid is deliberately out of scope. Import is one way.

@@ -40,7 +40,7 @@ export function routeFiles(files: readonly LoadedFile[]): RoutedFiles {
   return out;
 }
 
-/** "checkout.yml 6:9": the file a diagnostic is in and where, or just the file when it has no position. */
+/** "checkout.yaml 6:9": the file a diagnostic is in and where, or just the file when it has no position. */
 export function locationOf(d: Diagnostic, fileLabel: (file: Diagnostic["file"]) => string): string {
   const file = fileLabel(d.file);
   if (d.line === undefined) return file;

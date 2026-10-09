@@ -1,6 +1,6 @@
 import type { Edge, Node } from "@xyflow/react";
 import type { Document } from "yaml";
-import { joinDocuments, readBundle, readLayout, resolve, type ReadResult } from "./read.ts";
+import { detectStyle, joinDocuments, readBundle, readLayout, resolve, type ReadResult, type YamlStyle } from "./read.ts";
 import { toReactFlow } from "./to-react-flow.ts";
 import { fromReactFlow } from "./from-react-flow.ts";
 import { writeLayout, writeOrdo } from "./write.ts";
@@ -10,7 +10,7 @@ import type { Diagnostic, OrdoFile, OrdoLayoutFile, ResolvedDiagram } from "./ty
 
 // The Ordo pipeline end to end, for the editor's two dialogs.
 //
-// A diagram is one file, <name>.yml, holding two YAML documents: the
+// A diagram is one file, <name>.yaml, holding two YAML documents: the
 // structure and content (`ordo: 1`), then `---`, then the geometry
 // (`ordo-layout: 1`). They stay separate documents so that a drag only ever
 // changes lines in the second one and a rename only lines in the first, and
@@ -27,16 +27,18 @@ import type { Diagnostic, OrdoFile, OrdoLayoutFile, ResolvedDiagram } from "./ty
 // the same canvas twice is byte-identical.
 
 export * from "./types.ts";
-export { detectKind } from "./read.ts";
+export { detectKind, detectStyle } from "./read.ts";
+export type { YamlStyle } from "./read.ts";
 export { mintId, idMinter } from "./ids.ts";
 
 export const DEFAULT_NAME = "diagram";
 
 /** Kept next to the React Flow state. Any other way of replacing the canvas sets both documents to null. */
 export interface OrdoSession {
-  name: string; // tab labels: <name>.yml and <name>.layout.yml; default "diagram"
+  name: string; // the file is <name>.yaml; default "diagram"
   ordo: Document | null; // baseline from the last Ordo import or export
   layout: Document | null;
+  style?: YamlStyle; // the imported file's indentation, which the writer keeps
 }
 
 export const emptySession = (name = DEFAULT_NAME): OrdoSession => ({ name, ordo: null, layout: null });
@@ -81,16 +83,18 @@ export type OrdoImport = {
   edges: OrdoEdge[];
   ordo: Document | null; // the documents for the session; null when there is any error
   layout: Document | null;
+  style: YamlStyle; // how the text indents, for the session
   diagnostics: Diagnostic[];
 };
 
 /** Read a diagram's two files (the layout is optional) and project them onto the canvas. */
 export function importOrdo(ordoText: string, layoutText?: string | null): OrdoImport {
   const read = readDiagram(ordoText, layoutText);
+  const style = detectStyle(ordoText);
   if (!read.ok || !read.ordo?.value)
-    return { nodes: [], edges: [], ordo: null, layout: null, diagnostics: read.diagnostics };
+    return { nodes: [], edges: [], ordo: null, layout: null, style, diagnostics: read.diagnostics };
   const { nodes, edges } = toReactFlow(resolve(read.ordo.value), read.layout?.value ?? null);
-  return { nodes, edges, ordo: read.ordo.doc, layout: read.layout?.doc ?? null, diagnostics: read.diagnostics };
+  return { nodes, edges, ordo: read.ordo.doc, layout: read.layout?.doc ?? null, style, diagnostics: read.diagnostics };
 }
 
 export type OrdoExport = {
@@ -115,8 +119,8 @@ export function exportOrdo(nodes: Node[], edges: Edge[], session: OrdoSession | 
   });
   if (diagnostics.some(isError)) return refuse();
 
-  const ordo = writeOrdo(session?.ordo ?? null, diagram);
-  const written = writeLayout(session?.layout ?? null, layout);
+  const ordo = writeOrdo(session?.ordo ?? null, diagram, session?.style);
+  const written = writeLayout(session?.layout ?? null, layout, session?.style);
 
   // fromReactFlow proved the canvas survives the model; this proves the model
   // survives the text, so a fault in the patching can never reach a file.
@@ -135,7 +139,7 @@ export function diagramName(fileName: string | null | undefined, fallback = DEFA
 }
 
 /** The file a diagram is written to. */
-export const fileName = (name: string) => `${name}.yml`;
+export const fileName = (name: string) => `${name}.yaml`;
 
 // ---------------------------------------------------------------------------
 

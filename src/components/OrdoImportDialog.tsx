@@ -13,17 +13,17 @@ import DialogFrame, {
 import { lineSpan, routeFiles, tally } from "./diagnostics.ts";
 import type { LoadedFile } from "./diagnostics.ts";
 import { detectKind, diagramName, importOrdo, readDiagram } from "../ordo/index.ts";
-import type { Diagnostic } from "../ordo/index.ts";
+import type { Diagnostic, YamlStyle } from "../ordo/index.ts";
 import { joinDocuments } from "../ordo/read.ts";
 import type { OrdoEdge, OrdoNode } from "../types.ts";
 
-// Gets a diagram INTO the editor from its .yml file: paste it, drop it on the
+// Gets a diagram INTO the editor from its .yaml file: paste it, drop it on the
 // dialog, or choose it. The file is read here in the browser and goes nowhere
 // else.
 //
 // One file holds the whole diagram: the structure (`ordo: 1`), then `---`,
 // then the layout (`ordo-layout: 1`), which may be left out. A layout kept in
-// a file of its own (`<name>.layout.yml`) can be dropped or chosen beside its
+// a file of its own (`<name>.layout.yaml`) can be dropped or chosen beside its
 // diagram; the two are joined into the one text in the box, so every line
 // number a problem points at is a line you can see. The text is read and
 // validated as it changes: errors keep Import disabled, and warnings (a layout
@@ -35,6 +35,7 @@ export type OrdoImportResult = {
   edges: OrdoEdge[];
   ordo: Document;
   layout: Document | null;
+  style: YamlStyle;
   name: string;
 };
 
@@ -141,6 +142,7 @@ export default function OrdoImportDialog({
       edges: result.edges,
       ordo: result.ordo,
       layout: result.layout,
+      style: result.style,
       name: diagramName(file),
     });
     onClose();
@@ -171,7 +173,7 @@ export default function OrdoImportDialog({
   if (!open) return null;
 
   const diagnostics = [...(read?.diagnostics ?? [])].sort((a, b) => (a.line ?? 0) - (b.line ?? 0));
-  const label = file ?? "Diagram (.yml)";
+  const label = file ?? "Diagram (.yaml)";
   const kind = !empty && !stale ? detectKind(seen) : null;
   const status = empty
     ? "Nothing pasted yet"
@@ -189,7 +191,7 @@ export default function OrdoImportDialog({
     <DialogFrame
       titleId="ordo-import-yaml-title"
       title="Import  Ordo YAML"
-      subtitle="Paste a diagram's .yml file, or drop it here."
+      subtitle="Paste a diagram's .yaml file, or drop it here."
       icon={<FileIcon inside="in" />}
       width={760}
       onClose={onClose}
@@ -279,7 +281,7 @@ export default function OrdoImportDialog({
               pointerEvents: "none",
             }}
           >
-            Drop the .yml file
+            Drop the .yaml file
           </div>
         )}
       </div>

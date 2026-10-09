@@ -13,11 +13,12 @@ import { readFileSync } from "node:fs";
 import { diffLines } from "diff";
 import type { Edge, Node } from "@xyflow/react";
 
-import { emptySession, exportOrdo, importOrdo, readDiagram } from "../index.ts";
+import { detectStyle, emptySession, exportOrdo, importOrdo, readDiagram } from "../index.ts";
 import type { OrdoSession } from "../index.ts";
 import { fromReactFlow } from "../from-react-flow.ts";
 import { connectionEdge, rfEdge, rfNode } from "../rf-mapping.ts";
 import { resolve } from "../read.ts";
+import { parseAllDocuments } from "yaml";
 import { TUBE_TYPE } from "../../nodes/tube.ts";
 import { makeNode } from "../../nodes/defaults.ts";
 import { SHAPE_KEYS } from "../../shapes/registry.ts";
@@ -431,4 +432,83 @@ test("the one file needs its structure, once", () => {
   assert.deepEqual(messages(`${ORDO}---\n${ORDO}`), [[45, "a second structure document (ordo: 1); a file holds one diagram"]]);
   assert.deepEqual(messages(`${ORDO}---\ntitle: notes\n`), [[44, "document 2 is neither the structure (ordo: 1) nor the layout (ordo-layout: 1)"]]);
   assert.equal(readDiagram(BUNDLE, LAYOUT).ok, false); // a layout inside and another beside it
+});
+
+// ---------------------------------------------------------------------------
+// A file's indentation survives a save
+
+// A diagram's text as the import dialog and local mode open it, and what the
+// next save writes when nothing on the canvas changed.
+function reexport(text: string, change: (nodes: Node[]) => void = () => {}) {
+  const result = importOrdo(text);
+  assert.deepEqual(result.diagnostics, []);
+  const nodes = structuredClone(result.nodes) as Node[];
+  change(nodes);
+  const session: OrdoSession = { name: "checkout", ordo: result.ordo, layout: result.layout, style: result.style };
+  return exportOrdo(nodes, result.edges, session).text!;
+}
+
+// BUNDLE written back by `yaml` itself in another style. The second document
+// already starts with its `---`.
+const restyled = (style: object) =>
+  parseAllDocuments(BUNDLE)
+    .map((doc) => (doc as { toString: (o: object) => string }).toString({ lineWidth: 0, ...style }))
+    .join("");
+
+const changedLines = (a: string, b: string) => {
+  const was = a.split("\n");
+  return b.split("\n").flatMap((line, i) => (line !== was[i] ? [i] : []));
+};
+
+for (const style of [{ indent: 4 }, { indentSeq: false }, { indent: 4, indentSeq: false }]) {
+  test(`a file laid out as ${JSON.stringify(style)} exports back byte-identical`, () => {
+    const text = restyled(style);
+    assert.notEqual(text, BUNDLE);
+    assert.deepEqual(detectStyle(text), { indent: 2, indentSeq: true, ...style });
+    assert.equal(reexport(text), text);
+  });
+}
+
+test("a hand-written 4-space file keeps every line but a group's children", () => {
+  // Every level 4 deeper, and a group's children 4 in from its dash. `yaml`
+  // puts those 4 in from the group's key instead, two further right.
+  const hand = BUNDLE.split("\n")
+    .map((line) => {
+      const n = line.length - line.trimStart().length;
+      return n ? " ".repeat(/^[-#]/.test(line.trimStart()) ? n + 2 : n * 2) + line.trimStart() : line;
+    })
+    .join("\n");
+  assert.match(hand, /^ {8}- gateway$/m);
+
+  const out = reexport(hand);
+  const moved = changedLines(hand, out).map((i) => out.split("\n")[i]);
+  assert.deepEqual(moved, [
+    "          - gateway",
+    "          - services:",
+    "                - api",
+    "                # primary store",
+    "                - db",
+  ]);
+  assert.equal(out.split("\n").length, hand.split("\n").length);
+  assert.equal(reexport(out), out, "and the second save is a fixed point");
+});
+
+test("a drag in a 4-space file changes one line, after the ---", () => {
+  const text = restyled({ indent: 4 });
+  const out = reexport(text, (nodes) => {
+    nodes.find((n) => n.id === "api")!.position.x += 40;
+  });
+  const changed = changedLines(text, out);
+  assert.equal(changed.length, 1);
+  assert.ok(changed[0] > text.split("\n").indexOf("---"));
+});
+
+test("detectStyle: a new diagram and the canonical file read as the default", () => {
+  const empty = exportOrdo([], [], null).text!;
+  assert.equal(empty, "ordo: 1\nnodes: []\n---\nordo-layout: 1\n");
+  assert.deepEqual(detectStyle(empty), { indent: 2, indentSeq: true });
+  assert.deepEqual(detectStyle(BUNDLE), { indent: 2, indentSeq: true });
+  assert.deepEqual(detectStyle(""), { indent: 2, indentSeq: true });
+  // a comment between a key and its first child is skipped, and so are CRLFs
+  assert.deepEqual(detectStyle("ordo: 1\r\nnodes:\r\n# first\r\n- a\r\n"), { indent: 2, indentSeq: false });
 });

@@ -33,6 +33,7 @@ const box = (id: string, label = ""): OrdoNode => ({
 type View = {
   nodes: OrdoNode[];
   setNodes: Dispatch<SetStateAction<OrdoNode[]>>;
+  setEpoch: Dispatch<SetStateAction<number>>;
   undo: () => void;
   redo: () => void;
 };
@@ -42,8 +43,9 @@ function mount(t: TestContext, nodes: OrdoNode[]) {
   function Canvas() {
     const [ns, setNodes] = useState(nodes);
     const [es, setEdges] = useState<OrdoEdge[]>([]);
-    const history = useHistory({ nodes: ns, edges: es, setNodes, setEdges });
-    Object.assign(view, { nodes: ns, setNodes }, history);
+    const [epoch, setEpoch] = useState(0);
+    const history = useHistory({ nodes: ns, edges: es, setNodes, setEdges, epoch });
+    Object.assign(view, { nodes: ns, setNodes, setEpoch }, history);
     return null;
   }
   const root = createRoot(document.createElement("div"));
@@ -210,6 +212,31 @@ test("the follower re-seating a rider after an undo does not cost the redo", (t)
 
   redo(view);
   assert.equal(view.nodes[0].data.attach?.t, 0.6);
+});
+
+test("a new epoch starts history over from the diagram it brought in", (t) => {
+  const view = mount(t, [box("a")]);
+
+  click();
+  moveTo(view, "a", 10);
+  click();
+  label(view, "a", "edited");
+  // another tab's diagram replaces the canvas in the same commit as the epoch
+  act(() => {
+    view.setNodes([box("x"), box("y")]);
+    view.setEpoch((e) => e + 1);
+  });
+
+  undo(view);
+  assert.deepEqual(view.nodes.map((n) => n.id), ["x", "y"], "nothing of the old diagram comes back");
+  redo(view);
+  assert.deepEqual(view.nodes.map((n) => n.id), ["x", "y"]);
+
+  // and the new diagram's own edits undo as usual
+  click();
+  moveTo(view, "x", 30);
+  undo(view);
+  assert.equal(xOf(view, "x"), 0);
 });
 
 test("text fields count as typing; selects, colour wells and the canvas do not", () => {

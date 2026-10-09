@@ -178,7 +178,7 @@ test("View Ordo YAML: one file, exactly as imported, and Copy copies all of it",
   const session: OrdoSession = { name: "checkout", ordo: imported.ordo, layout: imported.layout };
   const { host, exported } = viewer(t, imported.nodes, imported.edges, session);
 
-  assert.match(host.textContent ?? "", /checkout\.yml/);
+  assert.match(host.textContent ?? "", /checkout\.yaml/);
   assert.equal(host.querySelectorAll("pre").length, 1);
   assert.equal(host.querySelector("pre")!.textContent, BUNDLE);
   assert.equal(exported.length, 1); // the patched documents went back to the session
@@ -216,4 +216,34 @@ test("View Ordo YAML: a field from outside the editor is named, and nothing is w
   assert.match(host.textContent ?? "", /This canvas can't be exported as Ordo YAML/);
   assert.match(host.textContent ?? "", /data\.color/);
   assert.equal(exported.length, 0);
+});
+
+test("View Ordo YAML: Download saves exactly what is shown, as <name>.yaml", async (t) => {
+  const imported = importOrdo(BUNDLE);
+  const { host } = viewer(t, imported.nodes, imported.edges, { name: "checkout", ordo: imported.ordo, layout: imported.layout });
+
+  // A download is a blob URL on a link that is clicked: record both.
+  const blobs = new Map<string, Blob>();
+  const saved: { name: string; href: string }[] = [];
+  const was = { create: URL.createObjectURL, revoke: URL.revokeObjectURL, click: window.HTMLAnchorElement.prototype.click };
+  URL.createObjectURL = (blob: Blob) => {
+    const url = `blob:test/${blobs.size}`;
+    blobs.set(url, blob);
+    return url;
+  };
+  URL.revokeObjectURL = () => {};
+  window.HTMLAnchorElement.prototype.click = function (this: HTMLAnchorElement) {
+    saved.push({ name: this.download, href: this.getAttribute("href")! });
+  };
+  t.after(() => {
+    URL.createObjectURL = was.create;
+    URL.revokeObjectURL = was.revoke;
+    window.HTMLAnchorElement.prototype.click = was.click;
+  });
+
+  click(button(host, "Download"));
+  assert.equal(saved.length, 1);
+  assert.equal(saved[0].name, "checkout.yaml");
+  assert.equal(await blobs.get(saved[0].href)!.text(), BUNDLE);
+  assert.equal(document.querySelectorAll("a[download]").length, 0, "the link is gone again");
 });

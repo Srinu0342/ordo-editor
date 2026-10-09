@@ -155,6 +155,45 @@ export function readBundle(text: string, shapes: ReadonlySet<string>): BundleRea
   return { ordo, layout, diagnostics };
 }
 
+/** How a file indents: what the writer is handed so a save keeps it. */
+export type YamlStyle = { indent: number; indentSeq: boolean };
+
+const DEFAULT_STYLE: YamlStyle = { indent: 2, indentSeq: true };
+
+// A key with nothing after its colon but perhaps a comment: `nodes:`, `data:`.
+// Its children are on the lines below, so their offset is the file's indent.
+const OPEN_KEY = /^( *)[^\s#-][^:#]*:\s*(#.*)?$/;
+const MAP_KEY = /^( *)[^\s#-][^:#]*:(\s|$)/;
+const SEQ_ITEM = /^( *)-(\s|$)/;
+
+/**
+ * The indentation `text` was written with, so that writing it back does not
+ * re-indent every line. Read from the first child of an open key: a mapping
+ * key gives the indent, a sequence item whether lists sit inside their key.
+ * `yaml` writes an unindented list two columns left of the indent (column 0
+ * at indent 2, column 2 at indent 4), so anything short of the indent reads
+ * as unindented. A file with neither, like a new diagram's `nodes: []`, gets
+ * the default; so does a `---`, which is not a list item.
+ */
+export function detectStyle(text: string): YamlStyle {
+  let mapOffset: number | null = null;
+  let seqOffset: number | null = null;
+  let open: number | null = null; // the indent of the open key just above, if any
+  for (const line of text.split(/\r?\n/)) {
+    if (!line.trim() || /^\s*#/.test(line)) continue;
+    if (open !== null) {
+      const indent = line.length - line.trimStart().length;
+      if (seqOffset === null && indent >= open && SEQ_ITEM.test(line)) seqOffset = indent - open;
+      else if (mapOffset === null && indent > open && MAP_KEY.test(line)) mapOffset = indent - open;
+    }
+    if (mapOffset !== null && seqOffset !== null) break;
+    const key = OPEN_KEY.exec(line);
+    open = key ? key[1].length : null;
+  }
+  const indent = mapOffset ?? (seqOffset ? seqOffset : DEFAULT_STYLE.indent);
+  return { indent, indentSeq: seqOffset === null ? DEFAULT_STYLE.indentSeq : seqOffset >= indent };
+}
+
 /**
  * The one file: the structure document, a `---`, and the layout document.
  * A layout document that was read from a file already carries its `---`.

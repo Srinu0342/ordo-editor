@@ -1,5 +1,5 @@
 import { Document, isMap, isNode, isScalar, isSeq, Pair, Scalar, YAMLMap, YAMLSeq, type Node as YNode } from "yaml";
-import { resolve } from "./read.ts";
+import { resolve, type YamlStyle } from "./read.ts";
 import {
   DEFAULTS,
   EDGE_FIELD_ORDER,
@@ -81,7 +81,7 @@ function prune(map: YAMLMap, keep: string[], top = true) {
   }
 }
 
-// ------------------------------------------------------------------ <name>.yml
+// ------------------------------------------------------------------ structure document
 
 interface SkeletonEntry {
   item: YNode;
@@ -279,21 +279,30 @@ function reconcileData(doc: Document, prev: ResolvedDiagram, target: ResolvedDia
 
 /**
  * Write the structure document. With a source document (from the last import or export), patch it;
- * without one, reconcile into a fresh document, which yields the canonical form.
+ * without one, reconcile into a fresh document, which yields the canonical form. `style` is the
+ * indentation the file came in with (see detectStyle), so a save does not re-indent it.
  */
-export function writeOrdo(source: Document | null, target: ResolvedDiagram): { doc: Document; text: string } {
+export function writeOrdo(
+  source: Document | null,
+  target: ResolvedDiagram,
+  style?: YamlStyle,
+): { doc: Document; text: string } {
   const doc = source ? source.clone() : new Document({ ordo: 1, nodes: [] });
   const prev = source ? resolve(source.toJS() as OrdoFile) : { nodes: [], edges: [] };
   reconcileSkeleton(doc, target);
   reconcileEdges(doc, target);
   reconcileData(doc, prev, target);
   prune(doc.contents as YAMLMap, ["nodes"]);
-  return { doc, text: doc.toString(STRINGIFY) };
+  return { doc, text: doc.toString({ ...STRINGIFY, ...style }) };
 }
 
-// ------------------------------------------------------------------ <name>.layout.yml
+// ------------------------------------------------------------------ layout document
 
-export function writeLayout(source: Document | null, target: OrdoLayoutFile): { doc: Document; text: string } {
+export function writeLayout(
+  source: Document | null,
+  target: OrdoLayoutFile,
+  style?: YamlStyle,
+): { doc: Document; text: string } {
   const doc = source ? source.clone() : new Document({ "ordo-layout": 1 });
   const top = doc.contents as YAMLMap;
   for (const [section, fields] of [
@@ -322,5 +331,5 @@ export function writeLayout(source: Document | null, target: OrdoLayoutFile): { 
     }
   }
   prune(top, []);
-  return { doc, text: doc.toString(STRINGIFY) };
+  return { doc, text: doc.toString({ ...STRINGIFY, ...style }) };
 }

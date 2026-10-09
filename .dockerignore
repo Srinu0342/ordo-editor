@@ -1,0 +1,9 @@
+# node_modules must not be copied in: esbuild and TypeScript ship per-platform
+# binaries, and a macOS install fails on Linux. The image runs `npm ci` itself.
+node_modules
+dist
+.git
+.claude
+*.log
+# Host settings: paths in it mean nothing inside the container.
+.env

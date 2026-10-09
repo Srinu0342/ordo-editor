@@ -5,18 +5,20 @@ import type { Document } from "yaml";
 import DialogFrame, { FileIcon, MONO, hintStyle, secondaryButton, smallButton } from "./DialogFrame.tsx";
 import { groupDiagnostics, plural } from "./diagnostics.ts";
 import { exportOrdo, fileName } from "../ordo/index.ts";
+import { download } from "../local/download.ts";
 import type { OrdoExport, OrdoSession } from "../ordo/index.ts";
 import type { OrdoEdge, OrdoNode } from "../types.ts";
 
-// The canvas as its .yml file — the structure, then `---`, then the layout —
-// with one Copy button.
+// The canvas as its .yaml file — the structure, then `---`, then the layout —
+// to copy or download.
 //
 // The export runs once, as the dialog opens: the canvas cannot change while
 // the dialog covers it. It patches the session's documents (from the last
 // import or export) rather than writing fresh files, so comments and order a
 // file came in with survive, and on success the patched documents become the
 // session's — which is why opening the dialog twice in a row shows the same
-// bytes. Nothing leaves the browser.
+// bytes. Nothing leaves the browser: Download saves through the browser's own
+// download, so free-form needs no server to keep a drawing.
 
 // How many messages of one kind are listed before the rest are counted.
 const SHOWN_PER_CODE = 20;
@@ -152,6 +154,9 @@ export default function ViewYamlDialog({
             <span style={{ fontSize: 12, color: "var(--ui-faint)" }}>{plural(text.split("\n").filter(Boolean).length, "line")}</span>
             <button type="button" ref={focusRef} onClick={copy} style={smallButton} title={`Copy ${name}`}>
               Copy
+            </button>
+            <button type="button" onClick={() => download(text, name)} style={smallButton} title={`Download ${name}`}>
+              Download
             </button>
           </div>
           <pre

@@ -4,7 +4,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "test": "node --import tsx --test \"src/**/__tests__/*.test.ts\"",
+    "test": "node --import tsx --test \"src/**/__tests__/*.test.ts\" \"server/**/__tests__/*.test.ts\"",
     "typecheck": "tsc",
     "dev": "tsx watch --clear-screen=false server/index.ts",
     "build": "tsc && vite build",

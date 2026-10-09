@@ -226,6 +226,16 @@ test(`the stack reaches back ${HISTORY_LIMIT} steps and no further`, () => {
   assert.deepEqual(undone, steps.slice(5).map((s) => s.i).reverse());
 });
 
+test("clear leaves nothing to undo or redo", () => {
+  const stack = createUndoStack<{ n: number }>();
+  stack.push({ n: 1 });
+  stack.push({ n: 2 });
+  stack.undo();
+  stack.clear();
+  assert.equal(stack.undo(), null);
+  assert.equal(stack.redo(), null);
+});
+
 test("redo walks forward again until a new change overrides it", () => {
   const stack = createUndoStack<{ n: number }>();
   const [one, two, three] = [{ n: 1 }, { n: 2 }, { n: 3 }];

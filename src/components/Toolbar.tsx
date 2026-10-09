@@ -9,7 +9,9 @@ import {
 import type { EdgeStyle } from "../edgeStyle.ts";
 import { MARKERS, MARKER_KEYS } from "../edges/index.ts";
 import { HISTORY_LIMIT } from "../history.ts";
-import { FileIcon } from "./DialogFrame.tsx";
+import { FileIcon, MONO } from "./DialogFrame.tsx";
+import { FolderIcon } from "./RepoPickerDialog.tsx";
+import { UnsyncedDot } from "./TabBar.tsx";
 import { useCanvasTheme } from "../nodes/chrome.tsx";
 import type { Scheme } from "../colorScheme.ts";
 
@@ -109,7 +111,107 @@ const SHORTCUTS = [
   `${MOD}+C / ${MOD}+X / ${MOD}+V: copy, cut, paste`,
   `${MOD}+D: duplicate`,
   `${MOD}+Z / ${MOD}+Shift+Z: undo, redo (last ${HISTORY_LIMIT} changes)`,
+  `${MOD}+S: sync (in a repo)`,
 ].join("\n");
+
+/** Local mode's corner of the strip: where you are, whether it is saved, and Sync. */
+export type LocalBar = {
+  crumb: string[]; // the root's label, then the repo's folders
+  tab: string | null;
+  status: "loading" | "up-to-date" | "unsynced" | "syncing" | "empty" | "invalid" | "error";
+  canSync: boolean;
+  onSync: () => void;
+  onLeave: () => void; // back to free-form
+};
+
+const STATUS_WORDS: Record<LocalBar["status"], string> = {
+  loading: "Opening…",
+  "up-to-date": "Up to date",
+  unsynced: "Unsynced",
+  syncing: "Syncing…",
+  empty: "No diagrams yet",
+  invalid: "File has errors",
+  error: "Can't open",
+};
+
+function LocalSegment({ local }: { local: LocalBar }) {
+  const where = local.crumb.join(" / ");
+  return (
+    <>
+      <div style={{ ...groupStyle, gap: 6, minWidth: 0 }} title={local.tab ? `${where} · ${local.tab}` : where}>
+        <span style={{ color: "var(--ui-muted)", display: "inline-flex" }}>
+          <FolderIcon size={14} />
+        </span>
+        <span
+          style={{
+            fontFamily: MONO,
+            fontSize: 12,
+            color: "var(--ui-ink-2)",
+            maxWidth: 260,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            direction: "rtl", // a long path keeps its end, the repo's own name, in view
+          }}
+        >
+          {"\u200e" + where + "\u200e"}
+        </span>
+        <button
+          type="button"
+          onClick={local.onLeave}
+          title="Close the repo and draw free-form"
+          aria-label="Close the repo"
+          style={{ ...importButton, height: 22, width: 22, padding: 0, justifyContent: "center", background: "transparent", border: "none" }}
+        >
+          <svg width="11" height="11" viewBox="0 0 15 15" fill="none">
+            <path d="M3.5 3.5l8 8M11.5 3.5l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+          </svg>
+        </button>
+      </div>
+      <span
+        role="status"
+        style={{
+          ...groupStyle,
+          gap: 6,
+          marginLeft: 6,
+          fontSize: 12.5,
+          whiteSpace: "nowrap",
+          color: local.status === "unsynced" || local.status === "invalid" ? "var(--ui-warn)" : "var(--ui-faint)",
+        }}
+      >
+        {local.status === "unsynced" && <UnsyncedDot />}
+        {STATUS_WORDS[local.status]}
+      </span>
+      <button
+        type="button"
+        onClick={local.onSync}
+        disabled={!local.canSync}
+        title={`Sync with ${local.tab ?? "the file"}: write the canvas, or load the file's changes (${MOD}+S)`}
+        style={{
+          ...importButton,
+          marginLeft: 8,
+          cursor: local.canSync ? "pointer" : "not-allowed",
+          opacity: local.canSync ? 1 : 0.55,
+          ...(local.status === "unsynced"
+            ? { border: "1px solid var(--ui-accent)", background: "var(--ui-accent-soft)", color: "var(--ui-accent-ink)" }
+            : {}),
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 18 18" fill="none" aria-hidden>
+          <path
+            d="M14.5 7.25A5.75 5.75 0 0 0 4.1 5.6M3.5 10.75a5.75 5.75 0 0 0 10.4 1.65"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          />
+          <path d="M3.75 2.75v3h3M14.25 15.25v-3h-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        Sync
+      </button>
+      {divider}
+    </>
+  );
+}
 
 export default function Toolbar({
   value,
@@ -123,6 +225,8 @@ export default function Toolbar({
   viewYamlRef,
   scheme,
   onToggleScheme,
+  onOpenRepo,
+  local,
 }: {
   value: EdgeStyle;
   onChange: (patch: Partial<EdgeStyle>) => void;
@@ -136,6 +240,8 @@ export default function Toolbar({
   viewYamlRef?: RefObject<HTMLButtonElement | null>;
   scheme: Scheme;
   onToggleScheme: () => void;
+  onOpenRepo: () => void;
+  local?: LocalBar; // present in local mode
 }) {
   const theme = useCanvasTheme();
   const activeType = lineTypeOf(value.dash);
@@ -159,6 +265,8 @@ export default function Toolbar({
         flexWrap: "wrap",
       }}
     >
+      {local && <LocalSegment local={local} />}
+
       <span style={{ color: "var(--ui-muted)", marginRight: 8 }}>Line</span>
 
       <div style={groupStyle}>
@@ -323,7 +431,7 @@ export default function Toolbar({
         ref={importYamlRef}
         type="button"
         onClick={onImportYaml}
-        title="Open a diagram from its .yml and .layout.yml files"
+        title="Open a diagram from its .yaml file"
         style={{ ...importButton, marginLeft: 6 }}
       >
         <FileIcon size={14} inside="in" />
@@ -339,6 +447,16 @@ export default function Toolbar({
       >
         <FileIcon size={14} inside="code" />
         View Ordo YAML
+      </button>
+
+      <button
+        type="button"
+        onClick={onOpenRepo}
+        title={local ? "Open another repo" : "Open a repo, and edit the diagrams in its .ordo/ folder"}
+        style={{ ...importButton, marginLeft: 6 }}
+      >
+        <FolderIcon size={14} />
+        Open repo
       </button>
 
       <button

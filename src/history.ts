@@ -296,7 +296,9 @@ export const applyStep = (
  * Undo and redo stacks. `push` lays a new step on top, dropping the oldest past
  * `limit`, and discards everything undone: a change made after an undo
  * overrides the steps it undid. `undo` and `redo` move one step across and hand
- * it back to be applied, or null when there is nothing on that side.
+ * it back to be applied, or null when there is nothing on that side. `clear`
+ * empties both, for when the canvas becomes another diagram: a step recorded
+ * on one diagram applied to another would carry its nodes across.
  */
 export function createUndoStack<S = Step>(limit = HISTORY_LIMIT) {
   const done: S[] = [];
@@ -317,6 +319,10 @@ export function createUndoStack<S = Step>(limit = HISTORY_LIMIT) {
       const step = undone.pop() ?? null;
       if (step) done.push(step);
       return step;
+    },
+    clear() {
+      done.length = 0;
+      undone.length = 0;
     },
   };
 }
