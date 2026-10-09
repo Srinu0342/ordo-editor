@@ -1,11 +1,11 @@
 # Ordo ↔ React Flow mapping
 
-A diagram is one file, `<name>.ordo`, holding two YAML documents: the
+A diagram is one file, `<name>.yml`, holding two YAML documents: the
 structure and content (`ordo: 1`), then a `---` line, then the layout
 (`ordo-layout: 1`). The layout part may be left out; the diagram is then laid
 out on import and gains its layout on the next export. Keeping them as two
 documents means a drag only changes lines after the `---`, and a rename only
-lines before it. The older two-file form (`<name>.layout.ordo` beside it)
+lines before it. The older two-file form (`<name>.layout.yml` beside it)
 still imports.
 
 The file is written from the canvas: whatever React Flow nodes and edges are
@@ -21,7 +21,7 @@ JSON Schemas in `src/ordo/schema/` are closed, so a misspelt field is an error.
 
 ## Nodes
 
-| Ordo `kind` | Canvas `type` | Palette name | Fields in `.ordo` (besides `label`, `type`) |
+| Ordo `kind` | Canvas `type` | Palette name | Fields in the structure (besides `label`, `type`) |
 |---|---|---|---|
 | `box` (default) | `box` | the 49 shapes | `shape`: a registry key (`rect`, `cyl`, `diam`…). Mermaid's aliases (`cylinder`, `database`, `diamond`…) are accepted on read. |
 | `group` | `container` | Group | `collapsed`, `members`, `mermaid` (the Mermaid type it came from). A group is any one-key map in the skeleton, so it never states its kind. |
@@ -43,7 +43,7 @@ tube's `attach` must name an edge, or it is an `unknown-edge` error.
 | `style.width/height`, or `width/height` after a resize | layout `w`, `h`: always for a group, otherwise only when it differs from the size the kind (or a box's shape) is dropped at |
 | `zIndex` | layout `z`, when it is not the kind's own (a fragment's is 1) |
 | `data.rotation` | layout `rotation` |
-| `data.attach` | `.ordo` `attach` (which edge) plus layout `t`, `shift`, `angle` (where on it) |
+| `data.attach` | structure `attach` (which edge) plus layout `t`, `shift`, `angle` (where on it) |
 | `style.pointerEvents` on a fragment | not stored: the palette gives every fragment it |
 | `data.isDropTarget` | not stored: a drag highlight that only exists while the pointer is held |
 

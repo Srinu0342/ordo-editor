@@ -8,7 +8,7 @@ import type { XY } from "../types.ts";
 // the first handle it finds — "n" — at BOTH ends, and every edge leaves the top
 // and arrives at the top. Two kinds of edge reach the canvas without a side.
 // Mermaid's never do carry one: it sends no port information, so its importer
-// picks the faces when it builds the edge (mermaid/toOrdo.ts). An .ordo file
+// picks the faces when it builds the edge (mermaid/toOrdo.ts). An Ordo file
 // pins only the handles someone chose, and leaves an edge on its default
 // handles unpinned on purpose, so OrdoEdge picks those faces as it draws.
 // Both ask the one rule below, so the two cannot drift apart.

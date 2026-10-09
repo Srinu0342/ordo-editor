@@ -8,7 +8,7 @@ import { exportOrdo, fileName } from "../ordo/index.ts";
 import type { OrdoExport, OrdoSession } from "../ordo/index.ts";
 import type { OrdoEdge, OrdoNode } from "../types.ts";
 
-// The canvas as its .ordo file — the structure, then `---`, then the layout —
+// The canvas as its .yml file — the structure, then `---`, then the layout —
 // with one Copy button.
 //
 // The export runs once, as the dialog opens: the canvas cannot change while

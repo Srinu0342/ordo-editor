@@ -74,7 +74,7 @@ function readLayoutDoc(doc: Document, lc: LineCounter, ordo: OrdoFile | null): R
   return { doc, value: hasErrors(diagnostics) ? null : (value as OrdoLayoutFile), diagnostics };
 }
 
-/** Read `.ordo` first: the layout validator needs its node and edge ids to flag orphans. */
+/** Read the structure first: the layout validator needs its node and edge ids to flag orphans. */
 export function readOrdo(text: string, shapes: ReadonlySet<string>): ReadResult<OrdoFile> {
   const { doc, lc } = parse(text);
   return readOrdoDoc(doc, lc, shapes);

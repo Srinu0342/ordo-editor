@@ -81,7 +81,7 @@ function prune(map: YAMLMap, keep: string[], top = true) {
   }
 }
 
-// ------------------------------------------------------------------ <name>.ordo
+// ------------------------------------------------------------------ <name>.yml
 
 interface SkeletonEntry {
   item: YNode;
@@ -278,7 +278,7 @@ function reconcileData(doc: Document, prev: ResolvedDiagram, target: ResolvedDia
 }
 
 /**
- * Write a `.ordo` file. With a source document (from the last import or export), patch it;
+ * Write the structure document. With a source document (from the last import or export), patch it;
  * without one, reconcile into a fresh document, which yields the canonical form.
  */
 export function writeOrdo(source: Document | null, target: ResolvedDiagram): { doc: Document; text: string } {
@@ -291,7 +291,7 @@ export function writeOrdo(source: Document | null, target: ResolvedDiagram): { d
   return { doc, text: doc.toString(STRINGIFY) };
 }
 
-// ------------------------------------------------------------------ <name>.layout.ordo
+// ------------------------------------------------------------------ <name>.layout.yml
 
 export function writeLayout(source: Document | null, target: OrdoLayoutFile): { doc: Document; text: string } {
   const doc = source ? source.clone() : new Document({ "ordo-layout": 1 });

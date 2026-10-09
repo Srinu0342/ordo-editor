@@ -1,4 +1,4 @@
-// The .ordo file format, v1: what the two files hold, the resolved model the
+// The Ordo file format, v1: what the two files hold, the resolved model the
 // converters work on, and the diagnostics every stage reports in.
 //
 // File types mirror the YAML exactly. The resolved types are what you get once
@@ -7,8 +7,8 @@
 //
 // The format can say everything the editor can put on its canvas: every node
 // kind the palette offers, every route, line, colour and marker an edge can
-// carry. Structure and content live in <name>.ordo; where things are — and so
-// everything a drag changes — lives in <name>.layout.ordo.
+// carry. Structure and content live in <name>.yml; where things are — and so
+// everything a drag changes — lives in <name>.layout.yml.
 
 // ---------- Vocabularies ----------
 
@@ -48,7 +48,7 @@ export type OrdoMarker = (typeof MARKERS)[number];
 export const PLACEMENTS = ["center", "above", "right"] as const;
 export type OrdoPlacement = (typeof PLACEMENTS)[number];
 
-// ---------- <name>.ordo : structure and content ----------
+// ---------- <name>.yml : structure and content ----------
 
 /** Stable key for a node or edge. Never derived from a label, never rewritten by the canvas. */
 export type OrdoId = string;
@@ -112,7 +112,7 @@ export interface OrdoFile {
   };
 }
 
-// ---------- <name>.layout.ordo : geometry only ----------
+// ---------- <name>.layout.yml : geometry only ----------
 
 /** Top-left corner in px, relative to the parent group (or the canvas for root nodes). Integers. */
 export interface OrdoBox {

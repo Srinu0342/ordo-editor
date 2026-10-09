@@ -1,4 +1,4 @@
-# Checkout flow: structure and content. Geometry lives in checkout.layout.ordo.
+# Checkout flow: structure and content. Geometry lives in checkout.layout.yml.
 ordo: 1
 
 nodes:

@@ -84,7 +84,7 @@ import type { OrdoSession } from "./ordo/index.ts";
 import { connectionEdge } from "./ordo/rf-mapping.ts";
 import type { Attach, OrdoEdge, OrdoNode, Rect, XY } from "./types.ts";
 
-// Every id in play, nodes and edges together: the .ordo format keeps the two in
+// Every id in play, nodes and edges together: the Ordo format keeps the two in
 // one namespace, and new ones are minted n<k> / e<k>, one above the highest in
 // use (see ordo/ids.ts).
 const idsOf = (nodes: { id: string }[], edges: { id: string }[]) => [
@@ -103,9 +103,9 @@ const FIT_ALL = "\u0000all";
 // dialog raises as a toast. Text that is not Mermaid at all has no type to
 // warn about; its label says so.
 const describeMermaid = (text: string): ImportDescription => {
-  // An .ordo file is YAML, not Mermaid; say where it goes instead.
+  // An Ordo .yml file is YAML, not Mermaid; say where it goes instead.
   if (detectKind(text))
-    return { ok: false, label: "This is an .ordo file — use Import  Ordo YAML", warning: null };
+    return { ok: false, label: "This is an Ordo .yml file — use Import  Ordo YAML", warning: null };
   const found = detectDiagram(text);
   return {
     ok: Boolean(found.family),
@@ -184,7 +184,7 @@ function Flow({
   const importYamlRef = useRef<HTMLButtonElement>(null);
   const viewYamlRef = useRef<HTMLButtonElement>(null);
 
-  // The .ordo session, next to the canvas state: the documents of the last
+  // The Ordo session, next to the canvas state: the documents of the last
   // Ordo import or export, which the next export patches. Any other way of
   // replacing the canvas (a Mermaid import) clears them, so an unrelated
   // file's comments never leak into a new diagram.
@@ -211,7 +211,7 @@ function Flow({
   const clipboardRef = useRef<Clip | null>(null);
 
   // A drawn edge gets an e<k> id, and is built by rfEdge whenever the toolbar's
-  // style is one .ordo v1 can store (see connectionEdge).
+  // style is one Ordo v1 can store (see connectionEdge).
   const onConnect = useCallback<OnConnect>(
     (c) =>
       setEdges((eds) =>
@@ -849,7 +849,7 @@ function Flow({
     [setNodes, setEdges, besideContent],
   );
 
-  // An .ordo import REPLACES the canvas (one undo step, like any other write),
+  // An Ordo import REPLACES the canvas (one undo step, like any other write),
   // becomes the session the next View Ordo YAML patches, and is framed once every
   // node has been measured.
   const onOrdoImport = useCallback(
@@ -868,7 +868,7 @@ function Flow({
     [],
   );
 
-  // Both .ordo dialogs hand focus back to the button that opened them.
+  // Both Ordo dialogs hand focus back to the button that opened them.
   const closeYamlImport = useCallback(() => {
     setYamlImportOpen(false);
     importYamlRef.current?.focus();

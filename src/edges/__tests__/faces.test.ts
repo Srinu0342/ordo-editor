@@ -239,7 +239,7 @@ test("a self-loop on default handles leaves the bottom and comes back in at the 
 });
 
 test("checkout's unpinned edges render face to face; the pinned one is React Flow's", () => {
-  const { nodes, edges, diagnostics } = importOrdo(fixture("checkout.ordo"), fixture("checkout.layout.ordo"));
+  const { nodes, edges, diagnostics } = importOrdo(fixture("checkout.yml"), fixture("checkout.layout.yml"));
   assert.deepEqual(diagnostics, []);
 
   // Absolute boxes, the way React Flow derives them: positions are relative to

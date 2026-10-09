@@ -1,4 +1,4 @@
-// The .ordo format end to end, ported from the build spec's reference tests:
+// The Ordo format end to end, ported from the build spec's reference tests:
 // GetPut, PutGet, diff locality (the line counts are the spec's table, exact),
 // lossless-or-refused, the validator, generation and prefill — plus parity with
 // the editor's own constructors, which export relies on to check itself.
@@ -25,9 +25,9 @@ import { DEFAULT_EDGE_STYLE, newEdge } from "../../edgeStyle.ts";
 import type { OrdoLayoutFile, ResolvedDiagram } from "../types.ts";
 
 const fixture = (name: string) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8");
-const ORDO = fixture("checkout.ordo");
-const LAYOUT = fixture("checkout.layout.ordo");
-const BROKEN = fixture("broken.ordo");
+const ORDO = fixture("checkout.yml");
+const LAYOUT = fixture("checkout.layout.yml");
+const BROKEN = fixture("broken.yml");
 
 // The fixture pair, imported the way the Import  Ordo YAML dialog does it.
 function imported() {
@@ -59,7 +59,7 @@ type Op = (n: Node[], e: Edge[]) => [Node[], Edge[]];
 type Lines = { del: number; add: number };
 const L = (del: number, add: number): Lines => ({ del, add });
 
-/** Each must export with exactly these line counts (.ordo, .layout.ordo), and pass PutGet. */
+/** Each must export with exactly these line counts (.yml, .layout.yml), and pass PutGet. */
 const OPS: [name: string, ordo: Lines, layout: Lines, op: Op][] = [
   ["Move a node (api)", L(0, 0), L(1, 1), (n, e) => {
     node(n, "api").position.x += 40;
@@ -197,13 +197,13 @@ test("exporting twice from one canvas is byte-identical", () => {
 const show = ({ del, add }: Lines) => (del || add ? [del && `-${del}`, add && `+${add}`].filter(Boolean).join(" ") : "0");
 
 for (const [name, ordoLines, layoutLines, op] of OPS) {
-  test(`${name}: .ordo ${show(ordoLines)}, .layout.ordo ${show(layoutLines)}, and it reads back`, () => {
+  test(`${name}: .yml ${show(ordoLines)}, .layout.yml ${show(layoutLines)}, and it reads back`, () => {
     const { nodes, edges, session } = imported();
     const [n, e] = op(structuredClone(nodes), structuredClone(edges));
     const out = exportOrdo(n, e, session);
     assert.deepEqual(out.diagnostics, []);
-    assert.deepEqual(count(ORDO, out.ordo!.text), ordoLines, ".ordo lines");
-    assert.deepEqual(count(LAYOUT, out.layout!.text), layoutLines, ".layout.ordo lines");
+    assert.deepEqual(count(ORDO, out.ordo!.text), ordoLines, ".yml lines");
+    assert.deepEqual(count(LAYOUT, out.layout!.text), layoutLines, ".layout.yml lines");
 
     // PutGet: re-import, and the canvas says the same thing (sibling order
     // carries no meaning in v1, so both sides are sorted by id).
@@ -297,7 +297,7 @@ test("export with no source documents yields a valid file with the same model", 
   assert.deepEqual(canonLayout(back.layout!.value), canonLayout(readDiagram(ORDO, LAYOUT).layout!.value));
 });
 
-test("import with no layout places every node, and the export after it leaves .ordo byte-identical", () => {
+test("import with no layout places every node, and the export after it leaves the structure byte-identical", () => {
   const result = importOrdo(ORDO, null);
   assert.deepEqual(result.diagnostics, []);
   assert.equal(result.nodes.length, 7);

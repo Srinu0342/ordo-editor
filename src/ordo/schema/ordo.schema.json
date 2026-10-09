@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:ordo:schema:ordo:1",
-  "title": "Ordo diagram: structure and content (<name>.ordo)",
+  "title": "Ordo diagram: structure and content (<name>.yml)",
   "type": "object",
   "required": ["ordo", "nodes"],
   "additionalProperties": false,

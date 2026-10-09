@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:ordo:schema:ordo-layout:1",
-  "title": "Ordo layout: geometry (<name>.layout.ordo)",
+  "title": "Ordo layout: geometry (<name>.layout.yml)",
   "type": "object",
   "required": ["ordo-layout"],
   "additionalProperties": false,

@@ -10,7 +10,7 @@ Built on [React Flow](https://reactflow.dev), with a headless SVG renderer that
 draws the same shapes outside the browser.
 
 > **Status: early.** The canvas, the node and edge library, and Mermaid import
-> all work. Saving does not exist yet: the `.ordo` file format is still being
+> all work. Saving does not exist yet: the Ordo file format (`.yml`) is still being
 > designed, so reloading the page gives you a blank canvas.
 
 ## Features
@@ -177,10 +177,10 @@ run the real Mermaid parser under jsdom.
 
 The planning notes are in [`ordo-workstreams.md`](ordo-workstreams.md). Next:
 
-- **The `.ordo` file format.** Diagrams as text, with layout kept apart from
+- **The Ordo file format (`.yml`).** Diagrams as text, with layout kept apart from
   structure so that dragging a node produces a small diff. Saving and loading
   depend on this.
-- **The engine.** Parse and serialise `.ordo` files, with a byte-for-byte round
+- **The engine.** Parse and serialise Ordo `.yml` files, with a byte-for-byte round
   trip.
 - **More Mermaid importers:** class, state, ER and C4.
 

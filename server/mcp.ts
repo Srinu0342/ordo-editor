@@ -23,10 +23,10 @@ function ordoServer() {
   server.registerTool(
     "validate_ordo",
     {
-      title: "Validate an .ordo diagram",
+      title: "Validate an Ordo diagram",
       description:
-        "Parse and validate the text of an .ordo file: the structure document, optionally followed by `---` and the layout document. Returns ok plus the same diagnostics the editor's import dialog shows, with line and column where known.",
-      inputSchema: z.object({ text: z.string().describe("The full contents of the .ordo file") }),
+        "Parse and validate the text of an Ordo .yml file: the structure document, optionally followed by `---` and the layout document. Returns ok plus the same diagnostics the editor's import dialog shows, with line and column where known.",
+      inputSchema: z.object({ text: z.string().describe("The full contents of the .yml file") }),
       annotations: { readOnlyHint: true },
     },
     async ({ text }) => {

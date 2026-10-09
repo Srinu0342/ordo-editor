@@ -41,7 +41,7 @@ import {
 //                 registry: a size, a style, a zIndex the palette gives every
 //                 node of the kind, and so need not be written down
 //   tube riding   data.attach = { edgeId, t, shift, angle }: the edge is
-//                 structure (.ordo `attach`), the rest is where it sits (layout)
+//                 structure (`attach`), the rest is where it sits (layout)
 //   edge route    edge.type (edges/routers.ts)
 //   edge label    data.label, "" for none; data.labelPlacement
 //   markers       data.markerStart / data.markerEnd, edges/markers.tsx keys

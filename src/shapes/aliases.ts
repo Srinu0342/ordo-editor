@@ -4,7 +4,7 @@
 // This is Mermaid's own alias table, lifted verbatim from the shape registry
 // in mermaid@12, so `@{ shape: database }` and `@{ shape: cyl }` land
 // together. Two readers share it: the Mermaid importer (mermaid/toOrdo.ts),
-// and the .ordo reader, which accepts these names as well as the registry's
+// and the Ordo reader, which accepts these names as well as the registry's
 // own keys, so a hand-written file can say `shape: cylinder` (see
 // ordo/rf-mapping.ts). Nothing writes an alias back out: the canvas only ever
 // holds registry keys.

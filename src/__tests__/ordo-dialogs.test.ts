@@ -1,4 +1,4 @@
-// The two .ordo dialogs, driven the way a person drives them: paste into the
+// The two Ordo dialogs, driven the way a person drives them: paste into the
 // box, read the diagnostics, press Import (and Replace), Copy.
 import { test } from "node:test";
 import type { TestContext } from "node:test";
@@ -32,10 +32,10 @@ import type { OrdoSession } from "../ordo/index.ts";
 
 const fixture = (name: string) =>
   readFileSync(new URL(`../ordo/__tests__/fixtures/${name}`, import.meta.url), "utf8");
-const ORDO = fixture("checkout.ordo");
-const LAYOUT = fixture("checkout.layout.ordo");
+const ORDO = fixture("checkout.yml");
+const LAYOUT = fixture("checkout.layout.yml");
 const BUNDLE = `${ORDO}---\n${LAYOUT}`; // the one file: structure, ---, layout
-const BROKEN = fixture("broken.ordo");
+const BROKEN = fixture("broken.yml");
 
 function mount(t: TestContext, element: ReturnType<typeof createElement>) {
   const host = document.createElement("div");
@@ -178,7 +178,7 @@ test("View Ordo YAML: one file, exactly as imported, and Copy copies all of it",
   const session: OrdoSession = { name: "checkout", ordo: imported.ordo, layout: imported.layout };
   const { host, exported } = viewer(t, imported.nodes, imported.edges, session);
 
-  assert.match(host.textContent ?? "", /checkout\.ordo/);
+  assert.match(host.textContent ?? "", /checkout\.yml/);
   assert.equal(host.querySelectorAll("pre").length, 1);
   assert.equal(host.querySelector("pre")!.textContent, BUNDLE);
   assert.equal(exported.length, 1); // the patched documents went back to the session

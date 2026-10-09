@@ -1,6 +1,6 @@
 import type { CSSProperties, HTMLAttributes, KeyboardEvent, ReactNode } from "react";
 
-// The chrome the .ordo dialogs share with the Mermaid ImportDialog: a blurred
+// The chrome the Ordo dialogs share with the Mermaid ImportDialog: a blurred
 // backdrop that closes on a click, a card with an icon tile, a title and a
 // subtitle, a close button, a body and a footer. The values are the
 // ImportDialog's own, so the three read as one family; only the content of
@@ -233,7 +233,7 @@ export default function DialogFrame({
   );
 }
 
-// The file icon both .ordo dialogs and their toolbar buttons wear: a page with
+// The file icon both Ordo dialogs and their toolbar buttons wear: a page with
 // a folded corner, and what is being done with it drawn inside.
 export function FileIcon({ size = 18, inside }: { size?: number; inside: "in" | "code" }) {
   return (

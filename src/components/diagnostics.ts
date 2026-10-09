@@ -1,7 +1,7 @@
 import { detectKind } from "../ordo/index.ts";
 import type { Diagnostic } from "../ordo/index.ts";
 
-// What the two .ordo dialogs make of text and diagnostics, without React: which
+// What the two Ordo dialogs make of text and diagnostics, without React: which
 // box a dropped file belongs in, where a diagnostic points, and how a long run
 // of them is grouped so that it stays readable.
 
@@ -26,7 +26,7 @@ export function routeFiles(files: readonly LoadedFile[]): RoutedFiles {
   for (const file of files) {
     const kind = detectKind(file.text);
     if (kind === null) {
-      out.problems.push(`${file.name} is not an .ordo file: it has no "ordo: 1" or "ordo-layout: 1" line.`);
+      out.problems.push(`${file.name} is not an Ordo diagram: it has no "ordo: 1" or "ordo-layout: 1" line.`);
       continue;
     }
     const kept = out[kind];
@@ -40,7 +40,7 @@ export function routeFiles(files: readonly LoadedFile[]): RoutedFiles {
   return out;
 }
 
-/** "checkout.ordo 6:9": the file a diagnostic is in and where, or just the file when it has no position. */
+/** "checkout.yml 6:9": the file a diagnostic is in and where, or just the file when it has no position. */
 export function locationOf(d: Diagnostic, fileLabel: (file: Diagnostic["file"]) => string): string {
   const file = fileLabel(d.file);
   if (d.line === undefined) return file;

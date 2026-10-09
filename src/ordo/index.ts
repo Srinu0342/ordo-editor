@@ -8,9 +8,9 @@ import { shapeVocabulary } from "./rf-mapping.ts";
 import type { OrdoEdge, OrdoNode } from "../types.ts";
 import type { Diagnostic, OrdoFile, OrdoLayoutFile, ResolvedDiagram } from "./types.ts";
 
-// The .ordo pipeline end to end, for the editor's two dialogs.
+// The Ordo pipeline end to end, for the editor's two dialogs.
 //
-// A diagram is one file, <name>.ordo, holding two YAML documents: the
+// A diagram is one file, <name>.yml, holding two YAML documents: the
 // structure and content (`ordo: 1`), then `---`, then the geometry
 // (`ordo-layout: 1`). They stay separate documents so that a drag only ever
 // changes lines in the second one and a rename only lines in the first, and
@@ -34,7 +34,7 @@ export const DEFAULT_NAME = "diagram";
 
 /** Kept next to the React Flow state. Any other way of replacing the canvas sets both documents to null. */
 export interface OrdoSession {
-  name: string; // tab labels: <name>.ordo and <name>.layout.ordo; default "diagram"
+  name: string; // tab labels: <name>.yml and <name>.layout.yml; default "diagram"
   ordo: Document | null; // baseline from the last Ordo import or export
   layout: Document | null;
 }
@@ -127,15 +127,15 @@ export function exportOrdo(nodes: Node[], edges: Edge[], session: OrdoSession | 
   return { diagnostics, text, ordo, layout: written };
 }
 
-/** `checkout.layout.ordo`, `checkout.ordo`, `checkout.yaml` and `checkout.yml` all name the diagram `checkout`. */
+/** `checkout.yml`, `checkout.yaml`, `checkout.layout.yml` and `checkout.layout.yaml` all name the diagram `checkout`. */
 export function diagramName(fileName: string | null | undefined, fallback = DEFAULT_NAME): string {
   const base = String(fileName ?? "").split(/[\\/]/).pop() ?? "";
-  const name = base.replace(/(\.layout\.ordo|\.ordo|\.ya?ml)$/i, "");
+  const name = base.replace(/(\.layout)?\.ya?ml$/i, "");
   return name.trim() || fallback;
 }
 
 /** The file a diagram is written to. */
-export const fileName = (name: string) => `${name}.ordo`;
+export const fileName = (name: string) => `${name}.yml`;
 
 // ---------------------------------------------------------------------------
 

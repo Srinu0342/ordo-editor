@@ -160,7 +160,7 @@ flowchart⟧. ⟦REVIEW⟧
 This gives Ordo two strategies, and the choice is a real fork in the road: ⟦REVIEW⟧
 
 **A. Harvest.** Render the diagram with Mermaid, scrape positions from the
-SVG, write them to `.layout.ordo`. Imported diagrams look exactly like the
+SVG, write them to `.layout.yml`. Imported diagrams look exactly like the
 Mermaid original. Cost: the converter needs a working Mermaid *render*, not
 just a parse. ⟦REVIEW⟧
 
@@ -227,7 +227,7 @@ headless SVG renderer, and the result is recognisably the same diagram. ⟦REVIE
 - The provenance question in its sharpest form: a position that came from
   dagre rather than from a human hand. Is it authored, or derived-until-
   touched? WS1 cannot dodge this once imports exist, and the answer probably
-  needs a per-node flag in `.layout.ordo`. ⟦REVIEW⟧
+  needs a per-node flag in `.layout.yml`. ⟦REVIEW⟧
 
 ### Explicit non-goal
 
@@ -241,7 +241,7 @@ expressiveness ceiling dictate Ordo's model. ⟦REVIEW⟧
 
 ### Goal
 
-The `.ordo` family: what the files are, what each one owns, and the concrete
+The Ordo file family: what the files are, what each one owns, and the concrete
 syntax. ⟦REVIEW⟧
 
 ### Status
@@ -323,7 +323,7 @@ cannot sensibly be sequenced one after the other. ⟦REVIEW⟧
 ### Done when
 
 Round-trip holds on the WS4 corpus, projection drives the canvas, and a drag
-produces a minimal diff in `.layout.ordo` with no change to `.ordo`. ⟦REVIEW⟧
+produces a minimal diff in `.layout.yml` with no change to the structure. ⟦REVIEW⟧
 
 ---
 

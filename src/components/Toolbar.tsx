@@ -131,7 +131,7 @@ export default function Toolbar({
   onImport: () => void;
   onImportYaml: () => void;
   onViewYaml: () => void;
-  // The .ordo dialogs hand focus back to the button that opened them.
+  // The Ordo dialogs hand focus back to the button that opened them.
   importYamlRef?: RefObject<HTMLButtonElement | null>;
   viewYamlRef?: RefObject<HTMLButtonElement | null>;
   scheme: Scheme;
@@ -323,7 +323,7 @@ export default function Toolbar({
         ref={importYamlRef}
         type="button"
         onClick={onImportYaml}
-        title="Open a diagram from its .ordo and .layout.ordo files"
+        title="Open a diagram from its .yml and .layout.yml files"
         style={{ ...importButton, marginLeft: 6 }}
       >
         <FileIcon size={14} inside="in" />
@@ -334,7 +334,7 @@ export default function Toolbar({
         ref={viewYamlRef}
         type="button"
         onClick={onViewYaml}
-        title="See the canvas as .ordo YAML, and copy it"
+        title="See the canvas as Ordo YAML, and copy it"
         style={{ ...importButton, marginLeft: 6 }}
       >
         <FileIcon size={14} inside="code" />

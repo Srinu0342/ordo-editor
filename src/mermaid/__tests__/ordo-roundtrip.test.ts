@@ -1,4 +1,4 @@
-// Phase 5 of the .ordo build: Mermaid → canvas → Ordo → canvas.
+// Phase 5 of the Ordo build: Mermaid → canvas → Ordo → canvas.
 //
 // Mermaid's only job is to put React Flow nodes and edges on the canvas; the
 // YAML is always written from those. So every diagram the importers can bring
