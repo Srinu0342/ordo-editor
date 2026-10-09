@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { checkDiagramName } from "../local/names.ts";
+import { primaryButton } from "./DialogFrame.tsx";
 
 // A repo's diagrams as footer tabs, Lucid-style: one per .ordo/<name>/ folder,
 // A–Z, the open one raised. `+` turns into a name field that checks the name
@@ -29,8 +30,8 @@ const tabStyle = (active: boolean): CSSProperties => ({
   background: active ? "var(--ui-surface)" : "transparent",
   boxShadow: active ? "inset 0 2px 0 var(--ui-accent)" : "none",
   color: active ? "var(--ui-ink)" : "var(--ui-muted)",
+  font: "inherit", // before fontWeight: the shorthand would reset it
   fontWeight: active ? 600 : 400,
-  font: "inherit",
   whiteSpace: "nowrap",
   cursor: active ? "default" : "pointer",
 });
@@ -114,11 +115,13 @@ export function NameField({
   onCreate,
   onCancel,
   placement = "below",
+  size = "small",
 }: {
   existing: readonly string[];
   onCreate: (name: string) => Promise<string | null>;
   onCancel: () => void;
   placement?: "above" | "below"; // where the message goes: the tab bar has no room below it
+  size?: "small" | "large"; // large on an empty repo's page, where it is the only thing to do
 }) {
   const [name, setName] = useState("");
   const [refused, setRefused] = useState<string | null>(null);
@@ -131,6 +134,8 @@ export function NameField({
 
   const problem = name ? checkDiagramName(name, existing) : null;
   const message = problem?.message ?? refused;
+  const large = size === "large";
+  const blocked = busy || !name || Boolean(problem);
 
   const submit = async () => {
     if (busy || !name || problem) return;
@@ -170,35 +175,39 @@ export function NameField({
           if (!name && !busy) onCancel();
         }}
         style={{
-          height: 24,
-          width: 180,
-          padding: "0 8px",
-          borderRadius: 6,
+          height: large ? 32 : 24,
+          width: large ? 240 : 180,
+          padding: large ? "0 10px" : "0 8px",
+          borderRadius: large ? 8 : 6,
           border: `1px solid ${message ? "var(--ui-danger)" : "var(--ui-accent)"}`,
           outline: "none",
           background: "var(--ui-surface)",
           color: "var(--ui-ink)",
           font: "inherit",
-          fontSize: 12.5,
+          fontSize: large ? 13 : 12.5,
         }}
       />
       <button
         type="button"
         onMouseDown={(e) => e.preventDefault()} // keep the field focused, so blur does not cancel it
         onClick={() => void submit()}
-        disabled={busy || !name || Boolean(problem)}
-        style={{
-          height: 24,
-          padding: "0 10px",
-          borderRadius: 6,
-          border: "1px solid var(--ui-border-strong)",
-          background: "var(--ui-surface)",
-          color: "var(--ui-ink-2)",
-          font: "inherit",
-          fontSize: 12,
-          cursor: busy || !name || problem ? "not-allowed" : "pointer",
-          opacity: busy || !name || problem ? 0.6 : 1,
-        }}
+        disabled={blocked}
+        style={
+          large
+            ? primaryButton(blocked)
+            : {
+                height: 24,
+                padding: "0 10px",
+                borderRadius: 6,
+                border: "1px solid var(--ui-border-strong)",
+                background: "var(--ui-surface)",
+                color: "var(--ui-ink-2)",
+                font: "inherit",
+                fontSize: 12,
+                cursor: blocked ? "not-allowed" : "pointer",
+                opacity: blocked ? 0.6 : 1,
+              }
+        }
       >
         Create
       </button>

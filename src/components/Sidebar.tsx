@@ -11,10 +11,13 @@ import { opsToSvg, svgDataUri } from "../render/svgWalker.ts";
 import type { Theme } from "../theme.ts";
 import { useCanvasTheme } from "../nodes/chrome.tsx";
 import { ROUTES, ROUTE_KEYS, MARKERS, MARKER_KEYS } from "../edges/index.ts";
+import type { EdgeStyle } from "../edgeStyle.ts";
+import LineStyle from "./LineStyle.tsx";
 
 // Icon rail plus the panel it swaps. Nodes are dragged onto the canvas; edges
 // are armed and then drawn by connecting two handles — different interactions,
 // which is why they are separate panels rather than two sections of one scroll.
+// The edges panel holds everything about a line: how it looks, and its route.
 
 export type Panel = "nodes" | "edges";
 
@@ -170,16 +173,19 @@ function Swatch({
 export default function Sidebar({
   panel,
   onPanelChange,
-  route,
-  onRouteChange,
+  edgeStyle,
+  onEdgeStyleChange,
+  selectedEdgeCount,
   onInspect,
 }: {
   panel: Panel;
   onPanelChange: (panel: Panel) => void;
-  route: string;
-  onRouteChange: (route: string) => void;
+  edgeStyle: EdgeStyle;
+  onEdgeStyleChange: (patch: Partial<EdgeStyle>) => void;
+  selectedEdgeCount: number;
   onInspect?: () => void;
 }) {
+  const route = edgeStyle.route;
   const [q, setQ] = useState("");
   const [isCollapsed, setIsCollapsed] = useState(false);
   const { getViewport, setViewport } = useReactFlow();
@@ -405,7 +411,9 @@ export default function Sidebar({
           </>
         ) : (
           <>
-            <div style={{ ...sectionTitle, marginTop: 2 }}>Routing</div>
+            <LineStyle value={edgeStyle} onChange={onEdgeStyleChange} selectedCount={selectedEdgeCount} />
+
+            <div style={{ ...sectionTitle, marginTop: 14 }}>Routing</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
               {ROUTE_KEYS.map((k) => {
                 const active = route === k;
@@ -414,7 +422,7 @@ export default function Sidebar({
                     key={k}
                     type="button"
                     aria-pressed={active}
-                    onClick={() => onRouteChange(k)}
+                    onClick={() => onEdgeStyleChange({ route: k })}
                     title={ROUTES[k].hint}
                     style={{
                       display: "flex",
@@ -460,10 +468,10 @@ export default function Sidebar({
               })}
             </div>
 
-            <div style={sectionTitle}>End markers</div>
+            <div style={sectionTitle}>Marker reference</div>
             <div style={{ fontSize: 11.5, color: "var(--ui-muted)", lineHeight: 1.5 }}>
-              Set per end in the toolbar. {MARKER_KEYS.length} available across
-              flowchart, UML and ER cardinality.
+              {MARKER_KEYS.length} markers across flowchart, UML and ER
+              cardinality. Pick one per end under Ends.
             </div>
             <div
               style={{

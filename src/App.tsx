@@ -26,17 +26,17 @@ import type {
 import { ToastContainer, toast } from "react-toastify";
 
 import Sidebar from "./components/Sidebar.tsx";
-import Toolbar from "./components/Toolbar.tsx";
+import Header from "./components/Header.tsx";
+import type { Project, SyncBar } from "./components/Header.tsx";
+import Landing, { OpeningCard, ProjectsCard } from "./components/Landing.tsx";
 import ImportDialog from "./components/ImportDialog.tsx";
 import type { ImportDescription } from "./components/ImportDialog.tsx";
 import OrdoImportDialog from "./components/OrdoImportDialog.tsx";
 import type { OrdoImportResult } from "./components/OrdoImportDialog.tsx";
 import ViewYamlDialog from "./components/ViewYamlDialog.tsx";
-import RepoPickerDialog from "./components/RepoPickerDialog.tsx";
 import SyncDialog from "./components/SyncDialog.tsx";
-import LocalPanel from "./components/LocalPanel.tsx";
+import LocalPanel, { LocalCard } from "./components/LocalPanel.tsx";
 import TabBar from "./components/TabBar.tsx";
-import type { LocalBar } from "./components/Toolbar.tsx";
 import AlignmentGuides from "./components/AlignmentGuides.tsx";
 import type { Panel } from "./components/Sidebar.tsx";
 import { alignRect, GUIDE_SNAP_PX } from "./alignment.ts";
@@ -88,7 +88,7 @@ import { detectKind, emptySession, idMinter, mintId } from "./ordo/index.ts";
 import type { OrdoSession } from "./ordo/index.ts";
 import { connectionEdge } from "./ordo/rf-mapping.ts";
 import { useLocalMode } from "./local/useLocalMode.ts";
-import type { LocalDeps } from "./local/useLocalMode.ts";
+import type { LocalDeps, LocalState } from "./local/useLocalMode.ts";
 import { download } from "./local/download.ts";
 import type { Attach, OrdoEdge, OrdoNode, Rect, XY } from "./types.ts";
 
@@ -104,6 +104,19 @@ const GRID = 10;
 
 // fitPending's value for "frame the whole canvas" rather than one group.
 const FIT_ALL = "\u0000all";
+
+// Which page the state calls for. Only a repo with a diagram to show gets the
+// editor; everything before that (no repo yet, its list on the way, none in
+// it, a repo that cannot be opened) is a card on a page of its own. A tab
+// that is loading keeps the editor, so switching tabs never flashes a page.
+type Page = "projects" | "opening" | "empty" | "error" | "editor";
+
+const pageOf = (s: LocalState): Page => {
+  if (s.mode === "free") return "projects";
+  if (s.status === "empty" || s.status === "error") return s.status;
+  if (s.status === "loading" && !s.tabs.length) return "opening";
+  return "editor";
+};
 
 // What the import dialog shows the moment text lands in it: the diagram type
 // Mermaid reads it as, and whether there is an importer for that type. A type
@@ -244,7 +257,7 @@ function Flow({
     toast[tone](message, { toastId: `ordo-local-${message}`, autoClose: tone === "error" ? 6000 : 2200 });
   }, []);
 
-  // Which repo and diagram the canvas is, and Sync. Nothing here in free-form.
+  // Which repo and diagram the canvas is, and Sync.
   const local = useLocalMode({
     nodes,
     edges,
@@ -256,7 +269,21 @@ function Flow({
     download,
     notify,
   });
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const page = pageOf(local.state);
+
+  // The canvas's shortcuts only act while the canvas is there to see.
+  const editingRef = useRef(false);
+  editingRef.current = page === "editor";
+
+  // Selecting a line brings up the panel that styles it. Only on the way in,
+  // so the shapes can be brought back while the line stays selected.
+  const selectedEdgeCount = edges.reduce((n, e) => n + (e.selected ? 1 : 0), 0);
+  const hadSelectedEdges = useRef(false);
+  useEffect(() => {
+    const has = selectedEdgeCount > 0;
+    if (has && !hadSelectedEdges.current) setPanel("edges");
+    hadSelectedEdges.current = has;
+  }, [selectedEdgeCount]);
 
   // Last pointer position over the canvas, in flow coordinates. Null whenever
   // the pointer is outside, which is what makes "paste where I'm pointing"
@@ -779,6 +806,7 @@ function Flow({
         return;
       }
 
+      if (!editingRef.current) return;
       if (isTyping(event.target)) return; // a label being edited owns its keys
 
       // Shift turns undo into redo. Both wait out a held pointer, and close an
@@ -886,36 +914,34 @@ function Flow({
         data: { mermaid: result.type },
       });
 
+      // The session's documents stay: they are the open file's baseline, and
+      // the next Sync patches them, keeping the file's comments and order (P16).
       setNodes((nds) => [
         ...nds.map((n) => (n.selected ? { ...n, selected: false } : n)),
         ...grouped.map((n) => (n.id === id ? { ...n, selected: true } : n)),
       ]);
-      // In free-form the import starts a new diagram, so the last file's
-      // documents go. In local mode they are the file's baseline: the next
-      // Sync patches them, keeping the file's comments and order (P16).
-      if (!local.isLocal()) setSession((s) => ({ ...s, ordo: null, layout: null }));
       setEdges((eds) => [
         ...eds.map((e) => (e.selected ? { ...e, selected: false } : e)),
         ...wired,
       ]);
       fitPending.current = id;
     },
-    [setNodes, setEdges, besideContent, local.isLocal],
+    [setNodes, setEdges, besideContent],
   );
 
   // An Ordo import REPLACES the canvas (one undo step, like any other write),
   // becomes the session the next View Ordo YAML patches, and is framed once every
   // node has been measured.
   const onOrdoImport = useCallback(
-    ({ nodes: nds, edges: eds, ordo, layout, style, name }: OrdoImportResult) => {
+    ({ nodes: nds, edges: eds, ordo, layout, style }: OrdoImportResult) => {
       setNodes(nds);
       setEdges(eds);
-      // In local mode the canvas is still the open tab's, whatever the
-      // imported file was called; Sync writes it there.
-      setSession((s) => ({ name: local.isLocal() ? s.name : name, ordo, layout, style }));
+      // The canvas is still the open tab's, whatever the imported file was
+      // called; Sync writes it there.
+      setSession((s) => ({ name: s.name, ordo, layout, style }));
       fitPending.current = FIT_ALL;
     },
-    [setNodes, setEdges, local.isLocal],
+    [setNodes, setEdges],
   );
 
   const onOrdoExported = useCallback(
@@ -1022,30 +1048,74 @@ function Flow({
     pointerRef.current = null;
   }, []);
 
-  // Local mode's corner of the toolbar.
+  // --- pages ----------------------------------------------------------------
+
   const ls = local.state;
-  const localBar: LocalBar | undefined =
+  const project: Project | undefined =
     ls.mode === "local"
-      ? {
-          crumb: [local.label, ...ls.repo.split("/").filter(Boolean)],
-          tab: ls.tab,
-          status:
-            ls.status === "ready"
-              ? !local.settled
-                ? "loading"
-                : local.syncing
-                  ? "syncing"
-                  : local.unsynced
-                    ? "unsynced"
-                    : "up-to-date"
-              : ls.status,
-          canSync: !local.syncing && ((ls.status === "ready" && local.settled) || ls.status === "invalid"),
-          onSync: () => void local.sync(),
-          onLeave: () => void local.goFree(),
-        }
+      ? { path: [local.label, ...ls.repo.split("/").filter(Boolean)], onLeave: () => void local.closeRepo() }
       : undefined;
-  const cover =
-    ls.mode === "local" && (ls.status === "empty" || ls.status === "invalid" || ls.status === "error") ? ls.status : null;
+  // The editor's header adds the open diagram's Sync and the import and
+  // export actions; every other page has only where you are.
+  const header = (extra?: { sync: SyncBar }) => (
+    <Header
+      scheme={scheme}
+      onToggleScheme={onToggleScheme}
+      project={project}
+      sync={extra?.sync}
+      file={
+        extra && {
+          onImportMermaid: () => setImportOpen(true),
+          onImportYaml: () => setYamlImportOpen(true),
+          onViewYaml: () => setYamlViewOpen(true),
+          importRef: importYamlRef,
+          viewRef: viewYamlRef,
+        }
+      }
+    />
+  );
+  // Every question Sync or a guard asks, over whichever page is up.
+  const question = local.question && <SyncDialog question={local.question} onChoice={local.answer} />;
+
+  if (ls.mode === "free" || page !== "editor") {
+    return (
+      <Landing header={header()}>
+        {ls.mode === "free" ? (
+          <ProjectsCard onOpen={(repo) => void local.openRepo(repo)} />
+        ) : page === "opening" ? (
+          <OpeningCard name={project!.path.at(-1)!} />
+        ) : (
+          <LocalCard
+            kind={page === "empty" ? "empty" : "error"}
+            repo={ls.repo}
+            message={ls.error}
+            tabs={ls.tabs}
+            onCreate={local.createTab}
+            onLeave={() => void local.closeRepo()}
+          />
+        )}
+        {question}
+      </Landing>
+    );
+  }
+
+  const sync: SyncBar = {
+    tab: ls.tab,
+    status:
+      ls.status === "ready"
+        ? !local.settled
+          ? "loading"
+          : local.syncing
+            ? "syncing"
+            : local.unsynced
+              ? "unsynced"
+              : "up-to-date"
+        : ls.status === "invalid"
+          ? "invalid"
+          : "loading",
+    canSync: !local.syncing && ((ls.status === "ready" && local.settled) || ls.status === "invalid"),
+    onSync: () => void local.sync(),
+  };
 
   return (
     <div
@@ -1056,29 +1126,9 @@ function Flow({
         height: "100vh",
       }}
     >
-      <Toolbar
-        value={edgeStyle}
-        onChange={changeEdgeStyle}
-        selectedCount={edges.reduce((n, e) => n + (e.selected ? 1 : 0), 0)}
-        selectedNodeCount={nodes.reduce((n, x) => n + (x.selected ? 1 : 0), 0)}
-        onImport={() => setImportOpen(true)}
-        onImportYaml={() => setYamlImportOpen(true)}
-        onViewYaml={() => setYamlViewOpen(true)}
-        importYamlRef={importYamlRef}
-        viewYamlRef={viewYamlRef}
-        scheme={scheme}
-        onToggleScheme={onToggleScheme}
-        onOpenRepo={() => setPickerOpen(true)}
-        local={localBar}
-      />
+      {header({ sync })}
 
-      <RepoPickerDialog
-        open={pickerOpen}
-        onClose={() => setPickerOpen(false)}
-        onOpen={(repo) => void local.openRepo(repo)}
-      />
-
-      {local.question && <SyncDialog question={local.question} onChoice={local.answer} />}
+      {question}
 
       <OrdoImportDialog
         open={yamlImportOpen}
@@ -1105,8 +1155,9 @@ function Flow({
         <Sidebar
           panel={panel}
           onPanelChange={setPanel}
-          route={edgeStyle.route}
-          onRouteChange={(route) => changeEdgeStyle({ route })}
+          edgeStyle={edgeStyle}
+          onEdgeStyleChange={changeEdgeStyle}
+          selectedEdgeCount={selectedEdgeCount}
           onInspect={() => console.log("Details:", toObject())}
         />
 
@@ -1120,19 +1171,7 @@ function Flow({
           {/* marker <defs> mounted once; edges reference them by url(#id) */}
           <EdgeMarkers />
 
-          {ls.mode === "local" && cover && (
-            <LocalPanel
-              kind={cover}
-              repo={ls.repo}
-              tab={ls.tab}
-              message={ls.error}
-              diagnostics={ls.diagnostics}
-              tabs={ls.tabs}
-              onCreate={local.createTab}
-              onOpenRepo={() => setPickerOpen(true)}
-              onFree={() => void local.goFree()}
-            />
-          )}
+          {ls.status === "invalid" && <LocalPanel tab={ls.tab} diagnostics={ls.diagnostics} />}
 
           <ReactFlow
             nodes={nodes}
@@ -1178,15 +1217,13 @@ function Flow({
         </div>
       </div>
 
-      {ls.mode === "local" && ls.status !== "error" && (
-        <TabBar
-          tabs={ls.tabs}
-          active={ls.tab}
-          unsynced={local.unsynced}
-          onSelect={(name) => void local.selectTab(name)}
-          onCreate={local.createTab}
-        />
-      )}
+      <TabBar
+        tabs={ls.tabs}
+        active={ls.tab}
+        unsynced={local.unsynced}
+        onSelect={(name) => void local.selectTab(name)}
+        onCreate={local.createTab}
+      />
     </div>
   );
 }

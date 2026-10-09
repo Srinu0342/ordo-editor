@@ -18,7 +18,7 @@ import type { OrdoEdge, OrdoNode } from "../types.ts";
 // file came in with survive, and on success the patched documents become the
 // session's — which is why opening the dialog twice in a row shows the same
 // bytes. Nothing leaves the browser: Download saves through the browser's own
-// download, so free-form needs no server to keep a drawing.
+// download, and Sync is what writes the repo's file.
 
 // How many messages of one kind are listed before the rest are counted.
 const SHOWN_PER_CODE = 20;

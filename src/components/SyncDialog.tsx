@@ -6,8 +6,7 @@ import { DIAGRAM_FILE } from "../local/api.ts";
 
 // Every question local mode asks, in one dialog: what Sync found when both
 // sides changed, a file that is gone or does not read, a canvas that cannot
-// be written, and leaving a diagram (or a free-form drawing) with work on it
-// that is saved nowhere. Each kind offers exactly its choices; the safe one
+// be written, and leaving a diagram with work on it that is saved nowhere. Each kind offers exactly its choices; the safe one
 // is focused, so Enter never overwrites anything.
 
 export type SyncQuestionKind =
@@ -17,8 +16,7 @@ export type SyncQuestionKind =
   | "invalid"
   | "blocked"
   | "blocked-take"
-  | "leave-tab"
-  | "leave-free";
+  | "leave-tab";
 
 export type SyncChoice = "keep" | "take" | "download" | "recreate" | "close-tab" | "sync" | "discard" | "ok" | "cancel";
 
@@ -55,11 +53,6 @@ export const SYNC_CHOICES: Record<SyncQuestionKind, Option[]> = {
   "leave-tab": [
     { choice: "sync", label: "Sync and switch", primary: true },
     { choice: "discard", label: "Discard and switch" },
-    { choice: "cancel", label: "Cancel" },
-  ],
-  "leave-free": [
-    { choice: "download", label: "Download", title: "Save the drawing as a file, then go on", primary: true },
-    { choice: "discard", label: "Discard" },
     { choice: "cancel", label: "Cancel" },
   ],
 };
@@ -103,11 +96,6 @@ function wording({ kind, tab = "this diagram" }: SyncQuestion): { title: string;
       };
     case "leave-tab":
       return { title: "Unsynced changes", text: `${tab} has edits that aren't in its file yet.` };
-    case "leave-free":
-      return {
-        title: "Leave free-form?",
-        text: "The canvas has a drawing that isn't saved anywhere. Opening a repo replaces it.",
-      };
   }
 }
 
@@ -163,11 +151,7 @@ export default function SyncDialog({
       ) : null}
       {!question.notice && !question.exportDiagnostics?.length && !question.fileDiagnostics?.length && (
         <p style={{ margin: 0, fontSize: 13, color: "var(--ui-muted)" }}>
-          {question.kind === "leave-free"
-            ? "Download keeps a copy in your downloads folder first."
-            : question.kind === "leave-tab"
-              ? "Sync writes them first; Discard drops them."
-              : "Nothing changes until you choose."}
+          {question.kind === "leave-tab" ? "Sync writes them first; Discard drops them." : "Nothing changes until you choose."}
         </p>
       )}
     </DialogFrame>

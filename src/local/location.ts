@@ -1,9 +1,9 @@
-// Where the editor is, as the address bar says it: free-form, or a repo and
-// one of its diagrams. The URL is the only place this lives, so a reload, a
+// Where the editor is, as the address bar says it: no repo (the projects
+// page), or a repo and one of its diagrams. The URL is the only place this lives, so a reload, a
 // bookmark or a second browser tab opens exactly the same thing, and the
 // server never has to remember which repo a tab is on.
 //
-//   /                                                   free-form
+//   /                                                   the projects page
 //   /?source=local&repo=code/payments-api&tab=checkout  local mode
 //
 // `repo` is relative to the server's workspace root. An empty `repo` is the
@@ -13,7 +13,7 @@ export type Place = { source: "free" } | { source: "local"; repo: string; tab: s
 
 export const FREE: Place = { source: "free" };
 
-/** The place `search` (a location.search string) names. Anything but `source=local` with a `repo` reads as free-form. */
+/** The place `search` (a location.search string) names. Anything but `source=local` with a `repo` reads as no repo. */
 export function readPlace(search: string): Place {
   const params = new URLSearchParams(search);
   const repo = params.get("repo");

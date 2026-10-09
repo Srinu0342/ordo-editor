@@ -10,9 +10,9 @@ Built on [React Flow](https://reactflow.dev), with a headless SVG renderer that
 draws the same shapes outside the browser.
 
 > **Status: early.** The canvas, the node and edge library, Mermaid import and
-> the Ordo file format all work. Ordo runs in two modes: **free-form**, where you
-> draw and download a `.yaml` file, and **local repo mode**, where diagrams live in
-> a repo's `.ordo/` folder and a Sync button keeps the canvas and the files in step.
+> the Ordo file format all work. You open a project (a folder, usually a repo);
+> its diagrams live in its `.ordo/` folder, and a Sync button keeps the canvas
+> and the files in step.
 
 ## Features
 
@@ -29,7 +29,8 @@ draws the same shapes outside the browser.
   - **Fragment** is the loop/alt/opt/par frame of a sequence diagram.
 - **Edges** come in four routes: straight, orthogonal, rounded step and
   curved. End markers cover flowchart, UML and ER cardinality, and you can set
-  stroke colour, weight and dash.
+  stroke colour, weight and dash. All of it lives in the sidebar's Edges panel,
+  which opens by itself when you select a line.
 
 ### Editing
 
@@ -58,19 +59,18 @@ In a Markdown file, Ordo imports the first ` ```mermaid ` block. A front-matter
 `title:` names the group the diagram lands in. Each import arrives as one
 selected group, placed to the right of whatever is already on the canvas.
 
-## Two modes
+## Projects
 
-### Free-form
+http://localhost:5173/ opens on **Open a project**: the repos you opened lately,
+and a browser over the folders under the workspace root (your home folder by
+default; see [Running](#running)). There is no canvas until a project is open.
 
-Open http://localhost:5173/ and draw. **View Ordo YAML** shows the canvas as an
-Ordo file, which you can copy or **Download** as `<name>.yaml`. **Import Ordo
-YAML** opens one again. Nothing leaves the browser.
+- A folder with no diagrams yet asks for the first one's name.
+- A folder with diagrams opens the editor on its first tab.
+- **Projects** in the header closes the project and goes back to the list.
 
-### Local repo mode
-
-**Open repo** picks a folder under the workspace root (your home folder by
-default; see [Running](#running)). The repo and the open diagram go in the URL,
-so a reload or a bookmark comes back to the same place:
+The repo and the open diagram go in the URL, so a reload or a bookmark comes
+back to the same place:
 
 ```
 http://localhost:5173/?source=local&repo=code/payments-api&tab=checkout
@@ -86,6 +86,8 @@ http://localhost:5173/?source=local&repo=code/payments-api&tab=checkout
 - A save keeps the file's own indentation, and a drag changes only lines after
   the `---`, so diffs stay small.
 - Leaving a diagram with unsynced edits asks first.
+- **Import** brings in a Mermaid diagram or an Ordo `.yaml` file; **View YAML**
+  shows the canvas as its file, to copy or download.
 - Ordo never runs git. Commit `.ordo/` like any other folder.
 
 One Ordo process serves every repo under the root, and each browser tab can

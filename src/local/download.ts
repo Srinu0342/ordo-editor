@@ -1,6 +1,5 @@
 // Save text as a file through the browser's own download, with no server in
-// between: free-form's Download, a conflict's "Download mine", and the
-// drawing you are about to leave behind when free-form opens a repo.
+// between: View Ordo YAML's Download, and a conflict's "Download mine".
 
 export function download(text: string, fileName: string) {
   const url = URL.createObjectURL(new Blob([text], { type: "application/yaml" }));

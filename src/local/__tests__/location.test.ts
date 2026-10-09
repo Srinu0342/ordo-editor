@@ -7,7 +7,7 @@ import type { Place } from "../location.ts";
 
 const search = (url: string) => new URL(url, "http://localhost").search;
 
-test("no query, or anything but source=local with a repo, is free-form", () => {
+test("no query, or anything but source=local with a repo, is no repo", () => {
   for (const s of ["", "?", "?repo=code/x", "?source=free&repo=code/x", "?source=local", "?source=LOCAL&repo=x"])
     assert.deepEqual(readPlace(s), { source: "free" }, s);
 });

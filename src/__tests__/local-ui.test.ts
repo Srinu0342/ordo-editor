@@ -1,6 +1,6 @@
-// Local mode's pieces of UI, driven the way a person drives them: the repo
-// picker walking folders, the tab bar's `+` checking a name, and the sync
-// dialog offering exactly its choices.
+// Local mode's pieces of UI, driven the way a person drives them: the
+// projects page's folder browser, the tab bar's `+` checking a name, and the
+// sync dialog offering exactly its choices.
 import { test } from "node:test";
 import type { TestContext } from "node:test";
 import assert from "node:assert/strict";
@@ -24,10 +24,10 @@ Object.defineProperty(globalThis, "navigator", { value: window.navigator, config
 
 const { act, createElement } = await import("react");
 const { createRoot } = await import("react-dom/client");
-const { default: RepoPickerDialog } = await import("../components/RepoPickerDialog.tsx");
+const { default: RepoBrowser } = await import("../components/RepoBrowser.tsx");
 const { default: TabBar } = await import("../components/TabBar.tsx");
 const { default: SyncDialog, SYNC_CHOICES } = await import("../components/SyncDialog.tsx");
-const { default: LocalPanel } = await import("../components/LocalPanel.tsx");
+const { LocalCard } = await import("../components/LocalPanel.tsx");
 const { rememberRepo } = await import("../local/recent.ts");
 import type { SyncChoice, SyncQuestionKind } from "../components/SyncDialog.tsx";
 
@@ -93,12 +93,12 @@ function stubFolders(t: TestContext) {
 }
 
 // ---------------------------------------------------------------------------
-// The repo picker
+// The folder browser
 
 test("the picker lists the root, goes into a folder, and opens a row", async (t) => {
   const asked = stubFolders(t);
   const opened: string[] = [];
-  const host = mount(t, createElement(RepoPickerDialog, { open: true, onClose: () => {}, onOpen: (r: string) => opened.push(r) }));
+  const host = mount(t, createElement(RepoBrowser, { onOpen: (r: string) => opened.push(r) }));
   await flush();
   assert.deepEqual(asked, [""]);
   assert.ok(button(host, "Open this folder"));
@@ -118,7 +118,7 @@ test("the picker lists the root, goes into a folder, and opens a row", async (t)
 test("the picker opens the folder it is showing, from the breadcrumb back to the root", async (t) => {
   stubFolders(t);
   const opened: string[] = [];
-  const host = mount(t, createElement(RepoPickerDialog, { open: true, onClose: () => {}, onOpen: (r: string) => opened.push(r) }));
+  const host = mount(t, createElement(RepoBrowser, { onOpen: (r: string) => opened.push(r) }));
   await flush();
   click(buttons(host).find((b) => b.title === "Go into code"));
   await flush();
@@ -136,19 +136,23 @@ test("the picker shows recent repos on top, and starts where it was last", async
   rememberRepo("code/payments-api");
   localStorage.setItem("ordo.pickerPath", "code");
   const opened: string[] = [];
-  const host = mount(t, createElement(RepoPickerDialog, { open: true, onClose: () => {}, onOpen: (r: string) => opened.push(r) }));
+  const host = mount(t, createElement(RepoBrowser, { onOpen: (r: string) => opened.push(r) }));
   await flush();
   assert.deepEqual(asked, ["code"]);
   const recent = buttons(host).filter((b) => b.title.startsWith("Open code/"));
-  assert.equal(recent[0].textContent, "code/payments-api", "newest first");
-  click(button(host, "code/web"));
+  assert.deepEqual(
+    recent.slice(0, 2).map((b) => b.textContent),
+    ["payments-api~/code", "web~/code"],
+    "newest first, each by its own name over the folders it sits in",
+  );
+  click(recent[1]);
   assert.deepEqual(opened, ["code/web"]);
 });
 
 test("a folder that has gone since last time falls back to the root; a 404 elsewhere is a sentence", async (t) => {
   const asked = stubFolders(t);
   localStorage.setItem("ordo.pickerPath", "gone/away");
-  const host = mount(t, createElement(RepoPickerDialog, { open: true, onClose: () => {}, onOpen: () => {} }));
+  const host = mount(t, createElement(RepoBrowser, { onOpen: () => {} }));
   await flush();
   await flush();
   assert.deepEqual(asked, ["gone/away", ""]);
@@ -247,7 +251,6 @@ const EXPECTED: Record<SyncQuestionKind, string[]> = {
   blocked: ["OK"],
   "blocked-take": ["Take the file's", "Cancel"],
   "leave-tab": ["Sync and switch", "Discard and switch", "Cancel"],
-  "leave-free": ["Download", "Discard", "Cancel"],
 };
 
 test("each sync question offers exactly its choices, and each button answers with its own", (t) => {
@@ -292,40 +295,47 @@ test("a file that does not read shows its problems with line and column", (t) =>
 // ---------------------------------------------------------------------------
 // The panel over the canvas
 
-test("a repo that can't be opened offers another repo, or free-form", (t) => {
+test("a repo that can't be opened says why, and goes back to the projects", (t) => {
   const picked: string[] = [];
   const host = mount(
     t,
-    createElement(LocalPanel, {
+    createElement(LocalCard, {
       kind: "error",
       repo: "code/gone",
       message: "There is no such folder under the workspace root.",
-      onCreate: async () => null,
-      onOpenRepo: () => picked.push("repo"),
-      onFree: () => picked.push("free"),
+      onLeave: () => picked.push("projects"),
     }),
   );
   assert.match(host.textContent ?? "", /Can't open code\/gone/);
-  click(button(host, "Open another repo"));
-  click(button(host, "Free-form"));
-  assert.deepEqual(picked, ["repo", "free"]);
+  assert.match(host.textContent ?? "", /no such folder/);
+  click(button(host, "Choose another folder"));
+  assert.deepEqual(picked, ["projects"]);
 });
 
-test("an empty repo offers a first diagram, by the same name rules", (t) => {
+test("an empty repo asks for its first diagram's name at once, by the same name rules", async (t) => {
   const created: string[] = [];
+  const left: string[] = [];
   const host = mount(
     t,
-    createElement(LocalPanel, {
+    createElement(LocalCard, {
       kind: "empty",
       repo: "code/web",
       onCreate: async (n: string) => (created.push(n), null),
-      onOpenRepo: () => {},
-      onFree: () => {},
+      onLeave: () => left.push("projects"),
     }),
   );
-  assert.match(host.textContent ?? "", /No diagrams in code\/web yet/);
-  click(button(host, "+ New diagram"));
+  assert.match(host.textContent ?? "", /No diagrams in web yet/);
   const input = host.querySelector<HTMLInputElement>('input[aria-label="New diagram name"]')!;
+  assert.ok(input, "the name field is there without a click");
   type(input, "nul.txt");
   assert.match(host.querySelector('[role="alert"]')?.textContent ?? "", /Windows reserves/);
+  assert.equal(button(host, "Create")!.disabled, true);
+
+  type(input, "checkout");
+  click(button(host, "Create"));
+  await flush();
+  assert.deepEqual(created, ["checkout"]);
+
+  click(button(host, "Choose another folder"));
+  assert.deepEqual(left, ["projects"]);
 });

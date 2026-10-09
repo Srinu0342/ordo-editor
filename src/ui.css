@@ -77,11 +77,23 @@
 }
 
 body {
+  margin: 0; /* every page is exactly the viewport: a margin would scroll it */
   background: var(--ui-surface);
   color: var(--ui-ink);
 }
 
-/* The repo picker's rows: inline styles have no :hover. */
+/* The folder browser's rows and recent projects: inline styles have no :hover. */
 .ordo-picker-row:hover {
-  background: var(--ui-accent-soft);
+  background: var(--ui-accent-soft) !important;
+}
+
+/* The header's borderless buttons and the rows of its menus. */
+.ordo-ghost:hover:not(:disabled) {
+  background: var(--ui-surface-sunken) !important;
+  color: var(--ui-ink) !important;
+}
+.ordo-menu-item:hover,
+.ordo-menu-item:focus-visible {
+  background: var(--ui-accent-soft) !important;
+  outline: none;
 }

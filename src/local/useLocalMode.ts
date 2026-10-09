@@ -14,6 +14,8 @@ import type { SyncChoice, SyncQuestion } from "../components/SyncDialog.tsx";
 
 // Local mode: one repo, its diagrams as tabs, and a manual two-way Sync. App
 // keeps the canvas; this keeps everything about which file the canvas is.
+// With no repo open (mode "free") there is no canvas at all: App shows the
+// projects page, and the graph stays empty until a diagram is loaded.
 //
 // One diagram is on the canvas at a time. For it the hook keeps a BASE: the
 // file's ETag as last loaded or written, and the canvas's own export at that
@@ -210,7 +212,7 @@ export function useLocalMode(deps: LocalDeps) {
       setSettled(false);
     };
 
-    /** An empty canvas with nothing behind it: free-form, an empty repo, a repo that cannot open. */
+    /** An empty canvas with nothing behind it: no repo, an empty repo, a repo that cannot open. */
     const clearCanvas = (name?: string) => {
       const d = depsRef.current;
       d.replaceCanvas([], []);
@@ -507,24 +509,8 @@ export function useLocalMode(deps: LocalDeps) {
       return false;
     };
 
-    /** Leaving free-form with a drawing on the canvas: download it, drop it, or stay. */
-    const leaveFree = async (): Promise<boolean> => {
-      const d = depsRef.current;
-      if (stateRef.current.mode !== "free" || !d.nodes.length) return true;
-      const choice = await ask({ kind: "leave-free" });
-      if (choice === "cancel" || choice === "ok") return false;
-      if (choice === "download") {
-        const out = exportNow();
-        if (out.text === null) {
-          d.notify("The drawing can't be written as Ordo YAML, so it wasn't downloaded.", "error");
-          return false;
-        }
-        d.download(out.text, fileName(d.session.name));
-      }
-      return true;
-    };
-
-    const leave = () => (stateRef.current.mode === "local" ? leaveTab() : leaveFree());
+    // With no repo open there is no canvas to lose.
+    const leave = () => (stateRef.current.mode === "local" ? leaveTab() : Promise.resolve(true));
 
     // --- what App calls -----------------------------------------------------
 
@@ -566,7 +552,8 @@ export function useLocalMode(deps: LocalDeps) {
 
     const sync = () => run(syncNow, false);
 
-    const goFree = () =>
+    /** Back to the projects page. */
+    const closeRepo = () =>
       run(async () => {
         if (!local() || !(await leaveTab())) return;
         navigate(FREE, "push");
@@ -632,7 +619,7 @@ export function useLocalMode(deps: LocalDeps) {
       selectTab,
       createTab,
       sync,
-      goFree,
+      closeRepo,
       answer,
       unsyncedNow,
       isLocal: () => stateRef.current.mode === "local",
@@ -699,7 +686,7 @@ export function useLocalMode(deps: LocalDeps) {
     selectTab: fns.selectTab,
     createTab: fns.createTab,
     sync: fns.sync,
-    goFree: fns.goFree,
+    closeRepo: fns.closeRepo,
     isLocal: fns.isLocal,
     unsyncedNow: fns.unsyncedNow,
   };

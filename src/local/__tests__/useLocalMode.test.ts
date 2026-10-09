@@ -32,7 +32,6 @@ const { createRoot } = await import("react-dom/client");
 const { useLocalMode } = await import("../useLocalMode.ts");
 const { useHistory } = await import("../../useHistory.ts");
 const { emptySession, exportOrdo } = await import("../../ordo/index.ts");
-const { makeNode } = await import("../../nodes/defaults.ts");
 import type { OrdoSession } from "../../ordo/index.ts";
 import type { OrdoEdge, OrdoNode } from "../../types.ts";
 import type { SyncChoice } from "../../components/SyncDialog.tsx";
@@ -479,37 +478,11 @@ test("Back and Forward move between tabs; Cancel on unsynced edits puts the addr
   assert.equal(window.location.search, `?source=local&repo=${REPO}&tab=checkout`);
 });
 
-test("leaving free-form with a drawing asks first, and Download saves it", async (t) => {
-  fakeServer(t, { checkout: CHECKOUT });
-  const view = mount(t);
-  const draft = makeNode("rect", { id: "n1", position: { x: 0, y: 0 } });
-  act(() => view.setNodes([{ ...draft, data: { ...draft.data, label: "draft" } }]));
-  await answering(view, () => view.local.openRepo(REPO), "leave-free", "cancel");
-  assert.equal(view.local.state.mode, "free");
-
-  await answering(view, () => view.local.openRepo(REPO), "leave-free", "download");
-  await ready(view);
-  assert.equal(view.downloads[0].name, "diagram.yaml");
-  assert.match(view.downloads[0].text, /draft/);
-  assert.equal(stateOf(view).tab, "checkout");
-});
-
-test("a drawing that can't be written isn't downloaded, and free-form stays", async (t) => {
-  fakeServer(t, { checkout: CHECKOUT });
-  const view = mount(t);
-  // a field the format has no place for: export refuses it
-  act(() => view.setNodes([{ id: "n1", type: "box", position: { x: 0, y: 0 }, data: { shape: "rect", color: "red" } } as OrdoNode]));
-  await answering(view, () => view.local.openRepo(REPO), "leave-free", "download");
-  assert.equal(view.local.state.mode, "free");
-  assert.deepEqual(view.downloads, []);
-  assert.match(view.notes.at(-1) ?? "", /can't be written/);
-});
-
-test("going back to free-form clears the canvas and the address", async (t) => {
+test("closing the repo clears the canvas and the address", async (t) => {
   fakeServer(t, { checkout: CHECKOUT });
   const view = mount(t, `/?source=local&repo=${REPO}&tab=checkout`);
   await ready(view);
-  await run(() => view.local.goFree());
+  await run(() => view.local.closeRepo());
   assert.equal(view.local.state.mode, "free");
   assert.equal(view.nodes.length, 0);
   assert.equal(window.location.pathname + window.location.search, "/");
