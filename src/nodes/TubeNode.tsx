@@ -10,7 +10,7 @@ import {
 } from "@xyflow/react";
 import type { NodeProps } from "@xyflow/react";
 import { walk } from "../render/reactWalker.tsx";
-import { nodeTheme } from "./chrome.tsx";
+import { useNodeTheme } from "./chrome.tsx";
 import {
   TUBE_SIZE,
   drawTube,
@@ -65,11 +65,11 @@ const chip: CSSProperties = {
   fontSize: 11,
   lineHeight: 1,
   padding: "4px 7px",
-  border: "1px solid #cbd5e1",
-  background: "#fff",
+  border: "1px solid var(--ui-border-strong)",
+  background: "var(--ui-surface)",
   borderRadius: 4,
   cursor: "pointer",
-  color: "#475569",
+  color: "var(--ui-ink-3)",
 };
 
 export default function TubeNode({
@@ -103,7 +103,7 @@ export default function TubeNode({
     attach && data?.align !== false ? (attach.angle ?? 0) + ALONG : 0;
   const angle = norm(base + rotation);
 
-  const theme = nodeTheme(selected);
+  const theme = useNodeTheme(selected);
   const { marks } = useMemo(
     () =>
       walk(
@@ -298,7 +298,7 @@ export default function TubeNode({
               marginLeft: -7,
               borderRadius: "50%",
               border: `1.5px solid ${theme["node.stroke.selected"]}`,
-              background: "#fff",
+              background: theme["node.fill"],
               cursor: "grab",
               // the stalk back to the tube, so the grip reads as a lever
               boxShadow: `0 7px 0 -6.25px ${theme["node.stroke.selected"]}, 0 14px 0 -6.25px ${theme["node.stroke.selected"]}`,

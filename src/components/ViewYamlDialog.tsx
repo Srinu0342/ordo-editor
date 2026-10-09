@@ -147,9 +147,9 @@ export default function ViewYamlDialog({
       {text !== null ? (
         <>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-            <code style={{ fontFamily: MONO, fontSize: 12.5, fontWeight: 600, color: "#3730a3" }}>{name}</code>
+            <code style={{ fontFamily: MONO, fontSize: 12.5, fontWeight: 600, color: "var(--ui-accent-ink-strong)" }}>{name}</code>
             <span style={{ flex: 1 }} />
-            <span style={{ fontSize: 12, color: "#94a3b8" }}>{plural(text.split("\n").filter(Boolean).length, "line")}</span>
+            <span style={{ fontSize: 12, color: "var(--ui-faint)" }}>{plural(text.split("\n").filter(Boolean).length, "line")}</span>
             <button type="button" ref={focusRef} onClick={copy} style={smallButton} title={`Copy ${name}`}>
               Copy
             </button>
@@ -165,9 +165,9 @@ export default function ViewYamlDialog({
               whiteSpace: "pre",
               padding: "12px 14px",
               borderRadius: 10,
-              border: "1px solid #e2e8f0",
-              background: "#f8fafc",
-              color: "#0f172a",
+              border: "1px solid var(--ui-border)",
+              background: "var(--ui-surface-sunken)",
+              color: "var(--ui-ink)",
               fontFamily: MONO,
               fontSize: 12.5,
               lineHeight: 1.6,
@@ -194,19 +194,19 @@ function Refusal({ result }: { result: OrdoExport }) {
     <div style={{ display: "grid", gap: 10 }}>
       {groups.map((g) => (
         <div key={g.code}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: "#334155", marginBottom: 4 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ui-ink-2)", marginBottom: 4 }}>
             <code style={{ fontFamily: MONO }}>{g.code}</code>
-            <span style={{ fontWeight: 400, color: "#94a3b8" }}> · {g.items.length}</span>
+            <span style={{ fontWeight: 400, color: "var(--ui-faint)" }}> · {g.items.length}</span>
           </div>
           <ul style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 2 }}>
             {g.items.slice(0, SHOWN_PER_CODE).map((d, i) => (
-              <li key={i} style={{ fontSize: 12.5, color: "#0f172a", lineHeight: 1.5 }}>
-                <code style={{ fontFamily: MONO, color: "#b91c1c", marginRight: 8 }}>{d.code}</code>
+              <li key={i} style={{ fontSize: 12.5, color: "var(--ui-ink)", lineHeight: 1.5 }}>
+                <code style={{ fontFamily: MONO, color: "var(--ui-danger)", marginRight: 8 }}>{d.code}</code>
                 {d.message}
               </li>
             ))}
             {g.items.length > SHOWN_PER_CODE && (
-              <li style={{ fontSize: 12.5, color: "#64748b", listStyle: "none" }}>
+              <li style={{ fontSize: 12.5, color: "var(--ui-muted)", listStyle: "none" }}>
                 and {g.items.length - SHOWN_PER_CODE} more like these
               </li>
             )}
@@ -218,7 +218,7 @@ function Refusal({ result }: { result: OrdoExport }) {
 
   return (
     <div>
-      <p style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 600, color: "#b45309" }}>
+      <p style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 600, color: "var(--ui-warn)" }}>
         This canvas can't be exported as Ordo YAML: {plural(result.diagnostics.length, "problem")}
       </p>
       <div style={{ maxHeight: "min(52vh, 480px)", overflow: "auto" }}>{list}</div>

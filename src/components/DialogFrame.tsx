@@ -13,8 +13,8 @@ export const MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 export const wellStyle = (active = false): CSSProperties => ({
   position: "relative",
   borderRadius: 10,
-  border: `1.5px ${active ? "dashed" : "solid"} ${active ? "#6366f1" : "#cbd5e1"}`,
-  background: active ? "#eef2ff" : "#f8fafc",
+  border: `1.5px ${active ? "dashed" : "solid"} ${active ? "var(--ui-accent)" : "var(--ui-border-strong)"}`,
+  background: active ? "var(--ui-accent-soft)" : "var(--ui-surface-sunken)",
   transition: "border-color .15s, background .15s",
 });
 
@@ -28,7 +28,7 @@ export const textareaStyle: CSSProperties = {
   outline: "none",
   borderRadius: 10,
   background: "transparent",
-  color: "#0f172a",
+  color: "var(--ui-ink)",
   fontFamily: MONO,
   fontSize: 12.5,
   lineHeight: 1.6,
@@ -45,9 +45,9 @@ export const smallButton: CSSProperties = {
   height: 28,
   padding: "0 10px",
   borderRadius: 7,
-  border: "1px solid #cbd5e1",
-  background: "#fff",
-  color: "#334155",
+  border: "1px solid var(--ui-border-strong)",
+  background: "var(--ui-surface)",
+  color: "var(--ui-ink-2)",
   font: "inherit",
   fontSize: 12,
   cursor: "pointer",
@@ -58,9 +58,9 @@ export const secondaryButton: CSSProperties = {
   height: 32,
   padding: "0 14px",
   borderRadius: 8,
-  border: "1px solid #cbd5e1",
-  background: "#fff",
-  color: "#334155",
+  border: "1px solid var(--ui-border-strong)",
+  background: "var(--ui-surface)",
+  color: "var(--ui-ink-2)",
   font: "inherit",
   fontSize: 13,
   cursor: "pointer",
@@ -76,11 +76,13 @@ export const primaryButton = (blocked: boolean): CSSProperties => ({
   fontWeight: 600,
   color: "#fff",
   cursor: blocked ? "not-allowed" : "pointer",
-  background: blocked ? "#c7d2fe" : "linear-gradient(180deg,#6366f1,#4f46e5)",
+  background: blocked
+    ? "var(--ui-accent-disabled)"
+    : "linear-gradient(180deg,#6366f1,#4f46e5)",
   boxShadow: blocked ? "none" : "0 1px 2px rgba(79,70,229,.45)",
 });
 
-export const hintStyle: CSSProperties = { flex: 1, fontSize: 11.5, color: "#94a3b8" };
+export const hintStyle: CSSProperties = { flex: 1, fontSize: 11.5, color: "var(--ui-faint)" };
 
 export default function DialogFrame({
   titleId,
@@ -118,7 +120,7 @@ export default function DialogFrame({
         display: "grid",
         placeItems: "center",
         padding: 20,
-        background: "rgba(15,23,42,.45)",
+        background: "var(--ui-backdrop)",
         backdropFilter: "blur(3px)",
         fontFamily: "system-ui, sans-serif",
       }}
@@ -140,11 +142,10 @@ export default function DialogFrame({
           position: "relative",
           width: `min(${width}px, 100%)`,
           maxHeight: "calc(100vh - 40px)",
-          background: "#fff",
+          background: "var(--ui-surface)",
           borderRadius: 14,
-          border: "1px solid #e2e8f0",
-          boxShadow:
-            "0 24px 60px -12px rgba(15,23,42,.32), 0 0 0 1px rgba(15,23,42,.04)",
+          border: "1px solid var(--ui-border)",
+          boxShadow: "var(--ui-shadow-dialog)",
           overflow: "hidden",
           display: "flex",
           flexDirection: "column",
@@ -156,7 +157,7 @@ export default function DialogFrame({
             alignItems: "center",
             gap: 12,
             padding: "16px 18px",
-            borderBottom: "1px solid #eef2f6",
+            borderBottom: "1px solid var(--ui-border-faint)",
           }}
         >
           <div
@@ -167,8 +168,8 @@ export default function DialogFrame({
               borderRadius: 9,
               display: "grid",
               placeItems: "center",
-              background: "linear-gradient(135deg,#eef2ff,#e0e7ff)",
-              color: "#4338ca",
+              background: "linear-gradient(135deg,var(--ui-accent-soft),var(--ui-accent-soft-2))",
+              color: "var(--ui-accent-ink)",
               flex: "0 0 auto",
             }}
           >
@@ -176,10 +177,10 @@ export default function DialogFrame({
           </div>
 
           <div style={{ minWidth: 0, flex: 1 }}>
-            <h2 id={titleId} style={{ margin: 0, fontSize: 15, color: "#0f172a" }}>
+            <h2 id={titleId} style={{ margin: 0, fontSize: 15, color: "var(--ui-ink)" }}>
               {title}
             </h2>
-            <p style={{ margin: "2px 0 0", fontSize: 12.5, color: "#64748b" }}>
+            <p style={{ margin: "2px 0 0", fontSize: 12.5, color: "var(--ui-muted)" }}>
               {subtitle}
             </p>
           </div>
@@ -197,7 +198,7 @@ export default function DialogFrame({
               borderRadius: 7,
               border: "1px solid transparent",
               background: "transparent",
-              color: "#64748b",
+              color: "var(--ui-muted)",
               cursor: "pointer",
               flex: "0 0 auto",
             }}
@@ -221,8 +222,8 @@ export default function DialogFrame({
             alignItems: "center",
             gap: 8,
             padding: "12px 18px",
-            borderTop: "1px solid #eef2f6",
-            background: "#fcfdfe",
+            borderTop: "1px solid var(--ui-border-faint)",
+            background: "var(--ui-surface-footer)",
           }}
         >
           {footer}

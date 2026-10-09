@@ -4,7 +4,7 @@ import type { NodeProps } from "@xyflow/react";
 import { drawShape, defaultSize, DEFAULT_SHAPE } from "../shapes/registry.ts";
 import { walk, labelBox } from "../render/reactWalker.tsx";
 import EditableLabel from "./EditableLabel.tsx";
-import { Anchors, nodeTheme } from "./chrome.tsx";
+import { Anchors, useNodeTheme } from "./chrome.tsx";
 import type { OrdoEdge, OrdoNode } from "../types.ts";
 
 // ONE component for all 47 shapes. The shape is a property, the geometry comes
@@ -28,7 +28,7 @@ export default function BoxNode({
   const w = Math.max(1, width ?? dw);
   const h = Math.max(1, height ?? dh);
 
-  const theme = nodeTheme(selected);
+  const theme = useNodeTheme(selected);
   const { marks, labels } = useMemo(
     () => walk(drawShape(shape, w, h), theme),
     [shape, w, h, theme],

@@ -20,6 +20,7 @@
 // reason --mk-hollow exists.
 
 import type { CSSProperties, ReactNode } from "react";
+import { useCanvasTheme } from "../nodes/chrome.tsx";
 
 export type MarkerDef = {
   label: string;
@@ -187,11 +188,25 @@ export const markerUrl = (key: string | undefined) =>
 // Mounted once next to the canvas. `auto-start-reverse` is what lets a single
 // definition serve both ends — without it every marker would need a mirrored
 // twin and the start/end slots could not share a vocabulary.
+//
+// Custom properties reach a marker through the DOM it is defined in, not the
+// edge that uses it, so this is where the hollow fill learns the canvas colour.
+// Only --mk-hollow is set: the other two must stay unset to fall through to
+// context-stroke.
 export function EdgeMarkers() {
+  const theme = useCanvasTheme();
   return (
     <svg
       aria-hidden="true"
-      style={{ position: "absolute", width: 0, height: 0, overflow: "hidden" }}
+      style={
+        {
+          position: "absolute",
+          width: 0,
+          height: 0,
+          overflow: "hidden",
+          "--mk-hollow": theme["canvas.bg"],
+        } as CSSProperties
+      }
     >
       <defs>
         {MARKER_KEYS.filter((k) => MARKERS[k].body).map((k) => {

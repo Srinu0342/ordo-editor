@@ -9,7 +9,7 @@ import {
 import type { NodeProps } from "@xyflow/react";
 import { labelBox, walk } from "../render/reactWalker.tsx";
 import EditableLabel from "./EditableLabel.tsx";
-import { nodeTheme } from "./chrome.tsx";
+import { useNodeTheme } from "./chrome.tsx";
 import {
   TAB_H,
   drawFragment,
@@ -36,11 +36,11 @@ const chip: CSSProperties = {
   fontSize: 11,
   lineHeight: 1,
   padding: "4px 7px",
-  border: "1px solid #cbd5e1",
-  background: "#fff",
+  border: "1px solid var(--ui-border-strong)",
+  background: "var(--ui-surface)",
   borderRadius: 4,
   cursor: "pointer",
-  color: "#475569",
+  color: "var(--ui-ink-3)",
 };
 
 export default function FragmentNode({
@@ -56,7 +56,7 @@ export default function FragmentNode({
   const operator = data.operator ?? "";
   const plain = isPlain(operator);
 
-  const theme = nodeTheme(selected);
+  const theme = useNodeTheme(selected);
   const { marks, labels } = useMemo(
     () => walk(drawFragment(w, h, data), theme),
     [w, h, data, theme],

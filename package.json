@@ -6,8 +6,9 @@
   "scripts": {
     "test": "node --import tsx --test \"src/**/__tests__/*.test.ts\"",
     "typecheck": "tsc",
-    "dev": "vite",
+    "dev": "tsx watch --clear-screen=false server/index.ts",
     "build": "tsc && vite build",
+    "start": "NODE_ENV=production tsx server/index.ts",
     "preview": "vite preview"
   },
   "keywords": [],
@@ -16,16 +17,22 @@
   "description": "A diagram editor where every shape is data, with Mermaid import",
   "dependencies": {
     "@dagrejs/dagre": "^3.1.1",
+    "@modelcontextprotocol/express": "^2.0.2",
+    "@modelcontextprotocol/node": "^2.1.1",
+    "@modelcontextprotocol/server": "^2.3.1",
     "@tisoap/react-flow-smart-edge": "^5.0.0",
     "@xyflow/react": "^12.12.0",
     "ajv": "^8.20.0",
+    "express": "^5.2.1",
     "mermaid": "12.0.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-toastify": "^11.1.0",
-    "yaml": "^2.9.1"
+    "yaml": "^2.9.1",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/jsdom": "^30.0.0",
     "@types/node": "^22.20.5",
     "@types/react": "^19.3.0",

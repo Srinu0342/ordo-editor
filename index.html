@@ -3,6 +3,19 @@
   <head>
     <meta charset="utf-8" />
     <title>Ordo</title>
+    <script>
+      // Before first paint, so a reload in dark mode never flashes white.
+      // Same key and fallback as src/colorScheme.ts.
+      try {
+        const saved = localStorage.getItem("ordo.colorScheme");
+        document.documentElement.dataset.theme =
+          saved === "light" || saved === "dark"
+            ? saved
+            : matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light";
+      } catch {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

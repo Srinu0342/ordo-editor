@@ -4,6 +4,7 @@
 
 import type { Connection } from "@xyflow/react";
 import type { EdgeData } from "./types.ts";
+import type { Theme } from "./theme.ts";
 
 export type EdgeStyle = {
   stroke: string;
@@ -40,6 +41,13 @@ export const DEFAULT_EDGE_STYLE: EdgeStyle = {
   markerEnd: "arrow-filled",
   route: "step",
 };
+
+// The default line colour is ink rather than black: it is drawn in the theme's
+// edge.stroke, so a line nobody recoloured stays readable on a dark canvas. The
+// data keeps the literal (it is the format's default too); any other colour
+// was picked on purpose and is drawn as picked.
+export const inkOf = <T extends string | undefined>(stroke: T, theme: Theme) =>
+  stroke === DEFAULT_EDGE_STYLE.stroke ? theme["edge.stroke"] : stroke;
 
 export const lineTypeOf = (dash: string | undefined) =>
   LINE_TYPES.find((t) => t.dash === (dash ?? ""))?.key ?? "solid";

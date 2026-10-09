@@ -217,9 +217,9 @@ export default function OrdoImportDialog({
       footer={
         confirming ? (
           <>
-            <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#b45309" }}>
+            <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "var(--ui-warn)" }}>
               Replace the current diagram?
-              <span style={{ fontWeight: 400, color: "#94a3b8" }}> ⌘Z undoes it.</span>
+              <span style={{ fontWeight: 400, color: "var(--ui-faint)" }}> ⌘Z undoes it.</span>
             </span>
             <button type="button" onClick={() => setConfirming(false)} style={secondaryButton}>
               Cancel
@@ -243,10 +243,10 @@ export default function OrdoImportDialog({
     >
       <label
         htmlFor="ordo-import-diagram"
-        style={{ display: "flex", gap: 6, alignItems: "baseline", marginBottom: 6, fontSize: 12.5, color: "#334155" }}
+        style={{ display: "flex", gap: 6, alignItems: "baseline", marginBottom: 6, fontSize: 12.5, color: "var(--ui-ink-2)" }}
       >
         <span style={{ fontWeight: 600, fontFamily: file ? MONO : "inherit" }}>{label}</span>
-        <span style={{ color: "#94a3b8" }}>the structure, then its layout after a --- line (optional)</span>
+        <span style={{ color: "var(--ui-faint)" }}>the structure, then its layout after a --- line (optional)</span>
       </label>
       <div style={wellStyle(dragging)}>
         <textarea
@@ -272,8 +272,8 @@ export default function OrdoImportDialog({
               display: "grid",
               placeItems: "center",
               borderRadius: 10,
-              background: "rgba(238,242,255,.9)",
-              color: "#4338ca",
+              background: "var(--ui-accent-glass)",
+              color: "var(--ui-accent-ink)",
               fontSize: 13,
               fontWeight: 600,
               pointerEvents: "none",
@@ -302,7 +302,7 @@ export default function OrdoImportDialog({
         <span
           role="status"
           style={{
-            color: !empty && !stale && diagnostics.some((d) => d.severity === "error") ? "#b45309" : "#94a3b8",
+            color: !empty && !stale && diagnostics.some((d) => d.severity === "error") ? "var(--ui-warn)" : "var(--ui-faint)",
           }}
         >
           {status}
@@ -310,7 +310,7 @@ export default function OrdoImportDialog({
       </div>
 
       {problems.length > 0 && (
-        <ul style={{ margin: "10px 0 0", paddingLeft: 18, color: "#b91c1c", fontSize: 12.5, lineHeight: 1.6 }}>
+        <ul style={{ margin: "10px 0 0", paddingLeft: 18, color: "var(--ui-danger)", fontSize: 12.5, lineHeight: 1.6 }}>
           {problems.map((p) => (
             <li key={p}>{p}</li>
           ))}
@@ -348,16 +348,16 @@ function Diagnostics({ items, onPick }: { items: Diagnostic[]; onPick: (d: Diagn
               textAlign: "left",
               font: "inherit",
               fontSize: 12.5,
-              color: d.severity === "error" ? "#0f172a" : "#64748b",
+              color: d.severity === "error" ? "var(--ui-ink)" : "var(--ui-muted)",
               cursor: d.line === undefined ? "default" : "pointer",
             }}
           >
-            <code style={{ fontFamily: MONO, minWidth: 52, color: d.severity === "error" ? "#b91c1c" : "#b45309" }}>
+            <code style={{ fontFamily: MONO, minWidth: 52, color: d.severity === "error" ? "var(--ui-danger)" : "var(--ui-warn)" }}>
               {d.line === undefined ? "—" : `${d.line}:${d.col ?? 1}`}
             </code>
             <span>
               {d.message}
-              {d.severity === "warning" && <span style={{ color: "#94a3b8" }}> (will be ignored)</span>}
+              {d.severity === "warning" && <span style={{ color: "var(--ui-faint)" }}> (will be ignored)</span>}
             </span>
           </button>
         </li>

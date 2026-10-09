@@ -10,6 +10,8 @@ import { route, ROUTE_KEYS } from "./routers.ts";
 import { markerUrl } from "./markers.tsx";
 import { defaultEnds, nodeBox } from "./faces.ts";
 import EditableLabel from "../nodes/EditableLabel.tsx";
+import { useCanvasTheme } from "../nodes/chrome.tsx";
+import { inkOf } from "../edgeStyle.ts";
 // Aliased: in this file `OrdoEdge` is the component.
 import type {
   LabelPlacement,
@@ -89,12 +91,15 @@ function OrdoEdge({
   const label = data?.label ?? "";
   const place = PLACE[data?.labelPlacement ?? "center"] ?? PLACE.center;
 
+  const theme = useCanvasTheme();
+  const stroke = inkOf(style?.stroke, theme);
+
   return (
     <>
       <BaseEdge
         id={id}
         path={edgePath}
-        style={style}
+        style={stroke === style?.stroke ? style : { ...style, stroke }}
         markerStart={ms}
         markerEnd={me}
       />
@@ -113,8 +118,9 @@ function OrdoEdge({
               // edges inside a subflow get an elevated z-index, which would
               // otherwise paint the line straight over this overlay
               zIndex: 1001,
-              background: "#fff",
-              border: "1px solid #cbd5e1",
+              background: theme["node.fill"],
+              border: `1px solid ${theme["node.rule"]}`,
+              color: theme["node.ink"],
               borderRadius: 999,
               padding: "2px 8px",
               lineHeight: 1.4,

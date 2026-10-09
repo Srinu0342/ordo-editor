@@ -140,7 +140,7 @@ export default function ImportDialog({
         display: "grid",
         placeItems: "center",
         padding: 20,
-        background: "rgba(15,23,42,.45)",
+        background: "var(--ui-backdrop)",
         backdropFilter: "blur(3px)",
         fontFamily: "system-ui, sans-serif",
       }}
@@ -158,11 +158,10 @@ export default function ImportDialog({
         }}
         style={{
           width: "min(680px, 100%)",
-          background: "#fff",
+          background: "var(--ui-surface)",
           borderRadius: 14,
-          border: "1px solid #e2e8f0",
-          boxShadow:
-            "0 24px 60px -12px rgba(15,23,42,.32), 0 0 0 1px rgba(15,23,42,.04)",
+          border: "1px solid var(--ui-border)",
+          boxShadow: "var(--ui-shadow-dialog)",
           overflow: "hidden",
           display: "flex",
           flexDirection: "column",
@@ -174,7 +173,7 @@ export default function ImportDialog({
             alignItems: "center",
             gap: 12,
             padding: "16px 18px",
-            borderBottom: "1px solid #eef2f6",
+            borderBottom: "1px solid var(--ui-border-faint)",
           }}
         >
           <div
@@ -185,8 +184,8 @@ export default function ImportDialog({
               borderRadius: 9,
               display: "grid",
               placeItems: "center",
-              background: "linear-gradient(135deg,#eef2ff,#e0e7ff)",
-              color: "#4338ca",
+              background: "linear-gradient(135deg,var(--ui-accent-soft),var(--ui-accent-soft-2))",
+              color: "var(--ui-accent-ink)",
               flex: "0 0 auto",
             }}
           >
@@ -221,11 +220,11 @@ export default function ImportDialog({
           <div style={{ minWidth: 0, flex: 1 }}>
             <h2
               id="ordo-import-title"
-              style={{ margin: 0, fontSize: 15, color: "#0f172a" }}
+              style={{ margin: 0, fontSize: 15, color: "var(--ui-ink)" }}
             >
               Import Mermaid
             </h2>
-            <p style={{ margin: "2px 0 0", fontSize: 12.5, color: "#64748b" }}>
+            <p style={{ margin: "2px 0 0", fontSize: 12.5, color: "var(--ui-muted)" }}>
               Paste the diagram source, or drop a {ACCEPT.split(",")[0]} file in
               the box.
             </p>
@@ -244,7 +243,7 @@ export default function ImportDialog({
               borderRadius: 7,
               border: "1px solid transparent",
               background: "transparent",
-              color: "#64748b",
+              color: "var(--ui-muted)",
               cursor: "pointer",
               flex: "0 0 auto",
             }}
@@ -277,9 +276,9 @@ export default function ImportDialog({
               position: "relative",
               borderRadius: 10,
               border: `1.5px ${dragging ? "dashed" : "solid"} ${
-                dragging ? "#6366f1" : "#cbd5e1"
+                dragging ? "var(--ui-accent)" : "var(--ui-border-strong)"
               }`,
-              background: dragging ? "#eef2ff" : "#f8fafc",
+              background: dragging ? "var(--ui-accent-soft)" : "var(--ui-surface-sunken)",
               transition: "border-color .15s, background .15s",
             }}
           >
@@ -305,7 +304,7 @@ export default function ImportDialog({
                 outline: "none",
                 borderRadius: 10,
                 background: "transparent",
-                color: "#0f172a",
+                color: "var(--ui-ink)",
                 fontFamily:
                   "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
                 fontSize: 12.5,
@@ -322,8 +321,8 @@ export default function ImportDialog({
                   display: "grid",
                   placeItems: "center",
                   borderRadius: 10,
-                  background: "rgba(238,242,255,.85)",
-                  color: "#4338ca",
+                  background: "var(--ui-accent-glass)",
+                  color: "var(--ui-accent-ink)",
                   fontSize: 13,
                   fontWeight: 600,
                   pointerEvents: "none",
@@ -364,9 +363,9 @@ export default function ImportDialog({
                 height: 28,
                 padding: "0 10px",
                 borderRadius: 7,
-                border: "1px solid #cbd5e1",
-                background: "#fff",
-                color: "#334155",
+                border: "1px solid var(--ui-border-strong)",
+                background: "var(--ui-surface)",
+                color: "var(--ui-ink-2)",
                 font: "inherit",
                 fontSize: 12,
                 cursor: "pointer",
@@ -388,10 +387,10 @@ export default function ImportDialog({
               title={error || status}
               style={{
                 color: error
-                  ? "#dc2626"
+                  ? "var(--ui-danger-strong)"
                   : found && !found.ok
-                    ? "#b45309"
-                    : "#94a3b8",
+                    ? "var(--ui-warn)"
+                    : "var(--ui-faint)",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
@@ -408,11 +407,11 @@ export default function ImportDialog({
             alignItems: "center",
             gap: 8,
             padding: "12px 18px",
-            borderTop: "1px solid #eef2f6",
-            background: "#fcfdfe",
+            borderTop: "1px solid var(--ui-border-faint)",
+            background: "var(--ui-surface-footer)",
           }}
         >
-          <span style={{ flex: 1, fontSize: 11.5, color: "#94a3b8" }}>
+          <span style={{ flex: 1, fontSize: 11.5, color: "var(--ui-faint)" }}>
             ⌘↵ to import · Esc to close
           </span>
 
@@ -423,9 +422,9 @@ export default function ImportDialog({
               height: 32,
               padding: "0 14px",
               borderRadius: 8,
-              border: "1px solid #cbd5e1",
-              background: "#fff",
-              color: "#334155",
+              border: "1px solid var(--ui-border-strong)",
+              background: "var(--ui-surface)",
+              color: "var(--ui-ink-2)",
               font: "inherit",
               fontSize: 13,
               cursor: "pointer",
@@ -449,7 +448,7 @@ export default function ImportDialog({
               color: "#fff",
               cursor: busy ? "progress" : blocked ? "not-allowed" : "pointer",
               background: blocked
-                ? "#c7d2fe"
+                ? "var(--ui-accent-disabled)"
                 : "linear-gradient(180deg,#6366f1,#4f46e5)",
               boxShadow: blocked ? "none" : "0 1px 2px rgba(79,70,229,.45)",
             }}

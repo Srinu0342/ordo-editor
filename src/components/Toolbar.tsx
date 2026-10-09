@@ -3,12 +3,15 @@ import {
   STROKE_SWATCHES,
   STROKE_WEIGHTS,
   LINE_TYPES,
+  inkOf,
   lineTypeOf,
 } from "../edgeStyle.ts";
 import type { EdgeStyle } from "../edgeStyle.ts";
 import { MARKERS, MARKER_KEYS } from "../edges/index.ts";
 import { HISTORY_LIMIT } from "../history.ts";
 import { FileIcon } from "./DialogFrame.tsx";
+import { useCanvasTheme } from "../nodes/chrome.tsx";
+import type { Scheme } from "../colorScheme.ts";
 
 const MOD = navigator.platform.startsWith("Mac") ? "\u2318" : "Ctrl";
 
@@ -20,18 +23,18 @@ const groupStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 
 
 const divider = (
   <div
-    style={{ width: 1, height: 22, background: "#e2e8f0", margin: "0 6px" }}
+    style={{ width: 1, height: 22, background: "var(--ui-border)", margin: "0 6px" }}
   />
 );
 
 const selectStyle: CSSProperties = {
   height: 28,
   borderRadius: 6,
-  border: "1px solid #cbd5e1",
-  background: "#fff",
+  border: "1px solid var(--ui-border-strong)",
+  background: "var(--ui-surface)",
   font: "inherit",
   fontSize: 12.5,
-  color: "#0f172a",
+  color: "var(--ui-ink)",
   padding: "0 6px",
   cursor: "pointer",
   maxWidth: 148,
@@ -45,11 +48,11 @@ const importButton: CSSProperties = {
   height: 28,
   padding: "0 11px",
   borderRadius: 6,
-  border: "1px solid #cbd5e1",
-  background: "#f8fafc",
+  border: "1px solid var(--ui-border-strong)",
+  background: "var(--ui-surface-sunken)",
   font: "inherit",
   fontSize: 12.5,
-  color: "#334155",
+  color: "var(--ui-ink-2)",
   cursor: "pointer",
 };
 
@@ -71,7 +74,7 @@ function MarkerSelect({
   onChange: (value: string) => void;
 }) {
   return (
-    <label style={{ ...groupStyle, color: "#64748b", fontSize: 12.5 }}>
+    <label style={{ ...groupStyle, color: "var(--ui-muted)", fontSize: 12.5 }}>
       {title}
       <select
         id={id}
@@ -118,6 +121,8 @@ export default function Toolbar({
   onViewYaml,
   importYamlRef,
   viewYamlRef,
+  scheme,
+  onToggleScheme,
 }: {
   value: EdgeStyle;
   onChange: (patch: Partial<EdgeStyle>) => void;
@@ -129,7 +134,10 @@ export default function Toolbar({
   // The .ordo dialogs hand focus back to the button that opened them.
   importYamlRef?: RefObject<HTMLButtonElement | null>;
   viewYamlRef?: RefObject<HTMLButtonElement | null>;
+  scheme: Scheme;
+  onToggleScheme: () => void;
 }) {
+  const theme = useCanvasTheme();
   const activeType = lineTypeOf(value.dash);
   const picked = [
     selectedNodeCount &&
@@ -143,22 +151,22 @@ export default function Toolbar({
         display: "flex",
         alignItems: "center",
         gap: 2,
-        padding: "8px 12px",
-        borderBottom: "1px solid #e2e8f0",
-        background: "#fff",
+        padding: "14px 12px 8px",
+        borderBottom: "1px solid var(--ui-border)",
+        background: "var(--ui-surface)",
         fontFamily: "system-ui, sans-serif",
         fontSize: 13,
         flexWrap: "wrap",
       }}
     >
-      <span style={{ color: "#64748b", marginRight: 8 }}>Line</span>
+      <span style={{ color: "var(--ui-muted)", marginRight: 8 }}>Line</span>
 
       <div style={groupStyle}>
         {STROKE_SWATCHES.map((c) => (
           <button
             key={c}
             type="button"
-            title={c}
+            title={inkOf(c, theme) === c ? c : `Ink (${c}) — follows the theme`}
             aria-label={`Stroke ${c}`}
             aria-pressed={value.stroke === c}
             onClick={() => onChange({ stroke: c })}
@@ -166,11 +174,11 @@ export default function Toolbar({
               width: 22,
               height: 22,
               borderRadius: 5,
-              background: c,
+              background: inkOf(c, theme),
               cursor: "pointer",
               border:
-                value.stroke === c ? "2px solid #6366f1" : "1px solid #cbd5e1",
-              boxShadow: value.stroke === c ? "0 0 0 2px #eef2ff" : "none",
+                value.stroke === c ? "2px solid var(--ui-accent)" : "1px solid var(--ui-border-strong)",
+              boxShadow: value.stroke === c ? "0 0 0 2px var(--ui-accent-soft)" : "none",
             }}
           />
         ))}
@@ -184,9 +192,9 @@ export default function Toolbar({
             width: 26,
             height: 24,
             padding: 0,
-            border: "1px solid #cbd5e1",
+            border: "1px solid var(--ui-border-strong)",
             borderRadius: 5,
-            background: "#fff",
+            background: "var(--ui-surface)",
             cursor: "pointer",
           }}
         />
@@ -194,7 +202,7 @@ export default function Toolbar({
 
       {divider}
 
-      <label style={{ ...groupStyle, color: "#64748b" }}>
+      <label style={{ ...groupStyle, color: "var(--ui-muted)" }}>
         Weight
         <select
           id="ordo-stroke-width"
@@ -230,15 +238,15 @@ export default function Toolbar({
               cursor: "pointer",
               border:
                 activeType === t.key
-                  ? "1px solid #6366f1"
-                  : "1px solid #cbd5e1",
-              background: activeType === t.key ? "#eef2ff" : "#fff",
+                  ? "1px solid var(--ui-accent)"
+                  : "1px solid var(--ui-border-strong)",
+              background: activeType === t.key ? "var(--ui-accent-soft)" : "var(--ui-surface)",
             }}
           >
             <svg width="30" height="10" viewBox="0 0 30 10">
               <path
                 d="M1 5h28"
-                stroke={value.stroke}
+                stroke={inkOf(value.stroke, theme)}
                 strokeWidth={value.strokeWidth}
                 strokeLinecap="round"
                 {...(t.dash ? { strokeDasharray: t.dash } : {})}
@@ -268,7 +276,7 @@ export default function Toolbar({
         style={{
           marginLeft: "auto",
           fontSize: 12.5,
-          color: picked.length ? "#4f46e5" : "#94a3b8",
+          color: picked.length ? "var(--ui-accent-strong)" : "var(--ui-faint)",
           cursor: "help",
           whiteSpace: "nowrap",
         }}
@@ -331,6 +339,37 @@ export default function Toolbar({
       >
         <FileIcon size={14} inside="code" />
         View Ordo YAML
+      </button>
+
+      <button
+        type="button"
+        onClick={onToggleScheme}
+        title={scheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+        aria-label={scheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+        style={{ ...importButton, marginLeft: 6, padding: 0, width: 28, justifyContent: "center" }}
+      >
+        {scheme === "dark" ? (
+          // sun: what the click switches to
+          <svg width="14" height="14" viewBox="0 0 18 18" fill="none">
+            <circle cx="9" cy="9" r="3.25" stroke="currentColor" strokeWidth="1.4" />
+            <path
+              d="M9 1.75v1.5M9 14.75v1.5M1.75 9h1.5M14.75 9h1.5M3.87 3.87l1.06 1.06M13.07 13.07l1.06 1.06M3.87 14.13l1.06-1.06M13.07 4.93l1.06-1.06"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+            />
+          </svg>
+        ) : (
+          // moon
+          <svg width="14" height="14" viewBox="0 0 18 18" fill="none">
+            <path
+              d="M15.25 10.6A6.5 6.5 0 0 1 7.4 2.75a6.5 6.5 0 1 0 7.85 7.85z"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinejoin="round"
+            />
+          </svg>
+        )}
       </button>
     </div>
   );

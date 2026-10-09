@@ -1,0 +1,82 @@
+/* The editor's own chrome — toolbar, sidebar, dialogs — as custom properties,
+   so inline styles name a role (var(--ui-muted)) and the scheme swaps under
+   them. The canvas is NOT styled from here: nodes and edges resolve theme.ts
+   tokens, which is what keeps the drawing identical between canvas and export.
+
+   data-theme is set on <html> by colorScheme.ts, and before first paint by the
+   script in index.html. */
+
+:root {
+  color-scheme: light;
+
+  --ui-surface: #ffffff;
+  --ui-surface-sunken: #f8fafc;
+  --ui-surface-footer: #fcfdfe;
+
+  --ui-border: #e2e8f0;
+  --ui-border-strong: #cbd5e1;
+  --ui-border-faint: #eef2f6;
+
+  --ui-ink: #0f172a;
+  --ui-ink-2: #334155;
+  --ui-ink-3: #475569;
+  --ui-muted: #64748b;
+  --ui-faint: #94a3b8;
+
+  --ui-accent: #6366f1;
+  --ui-accent-strong: #4f46e5;
+  --ui-accent-ink: #4338ca;
+  --ui-accent-ink-strong: #3730a3;
+  --ui-accent-soft: #eef2ff;
+  --ui-accent-soft-2: #e0e7ff;
+  --ui-accent-glass: rgba(238, 242, 255, 0.9);
+  --ui-accent-disabled: #c7d2fe;
+
+  --ui-warn: #b45309;
+  --ui-danger: #b91c1c;
+  --ui-danger-strong: #dc2626;
+
+  --ui-backdrop: rgba(15, 23, 42, 0.45);
+  --ui-shadow-dialog: 0 24px 60px -12px rgba(15, 23, 42, 0.32),
+    0 0 0 1px rgba(15, 23, 42, 0.04);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --ui-surface: #161d25;
+  --ui-surface-sunken: #11171e;
+  --ui-surface-footer: #131a21;
+
+  --ui-border: #243040;
+  --ui-border-strong: #334155;
+  --ui-border-faint: #1d2631;
+
+  --ui-ink: #e2e8f0;
+  --ui-ink-2: #cbd5e1;
+  --ui-ink-3: #a3b1c4;
+  --ui-muted: #94a3b8;
+  --ui-faint: #6b7b90;
+
+  --ui-accent: #818cf8;
+  --ui-accent-strong: #a5b4fc;
+  --ui-accent-ink: #c7d2fe;
+  --ui-accent-ink-strong: #c7d2fe;
+  --ui-accent-soft: rgba(99, 102, 241, 0.18);
+  --ui-accent-soft-2: rgba(99, 102, 241, 0.3);
+  --ui-accent-glass: rgba(30, 33, 72, 0.9);
+  --ui-accent-disabled: #34386b;
+
+  --ui-warn: #fbbf24;
+  --ui-danger: #f87171;
+  --ui-danger-strong: #f87171;
+
+  --ui-backdrop: rgba(2, 6, 12, 0.6);
+  --ui-shadow-dialog: 0 24px 60px -12px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+body {
+  background: var(--ui-surface);
+  color: var(--ui-ink);
+}

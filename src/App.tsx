@@ -75,6 +75,10 @@ import {
 } from "./selection.ts";
 import type { Clip } from "./selection.ts";
 import { useHistory, isTyping } from "./useHistory.ts";
+import { useColorScheme } from "./colorScheme.ts";
+import type { Scheme } from "./colorScheme.ts";
+import { THEMES } from "./theme.ts";
+import { ThemeContext, useCanvasTheme } from "./nodes/chrome.tsx";
 import { detectKind, emptySession, idMinter, mintId } from "./ordo/index.ts";
 import type { OrdoSession } from "./ordo/index.ts";
 import { connectionEdge } from "./ordo/rf-mapping.ts";
@@ -162,7 +166,14 @@ const isDescendantOfAny = (
 const initialNodes: OrdoNode[] = [];
 const initialEdges: OrdoEdge[] = [];
 
-function Flow() {
+function Flow({
+  scheme,
+  onToggleScheme,
+}: {
+  scheme: Scheme;
+  onToggleScheme: () => void;
+}) {
+  const theme = useCanvasTheme();
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [panel, setPanel] = useState<Panel>("nodes");
@@ -974,6 +985,8 @@ function Flow() {
         onViewYaml={() => setYamlViewOpen(true)}
         importYamlRef={importYamlRef}
         viewYamlRef={viewYamlRef}
+        scheme={scheme}
+        onToggleScheme={onToggleScheme}
       />
 
       <OrdoImportDialog
@@ -1040,12 +1053,20 @@ function Flow() {
             selectionKeyCode="Shift"
             multiSelectionKeyCode={["Meta", "Control"]}
             selectionMode={SelectionMode.Partial}
+            // React Flow's own chrome: controls, minimap, handles, the lasso.
+            colorMode={scheme}
           >
             {/* keeps every rider on the edge it was dropped on */}
             <TubeFollower />
             <AlignmentGuides guides={guides} />
 
-            <Background variant={BackgroundVariant.Lines} gap={GRID} size={1} />
+            <Background
+              variant={BackgroundVariant.Lines}
+              gap={GRID}
+              size={1}
+              color={theme["canvas.grid"]}
+              bgColor={theme["canvas.bg"]}
+            />
             <MiniMap />
             <Controls />
           </ReactFlow>
@@ -1056,22 +1077,26 @@ function Flow() {
 }
 
 export default function App() {
+  const [scheme, toggleScheme] = useColorScheme();
   return (
-    <ReactFlowProvider>
-      <Flow />
-      {/* One container for every toast in the app. Above the import dialog's
-          backdrop (z 2000) on its own z-index, and top-centre so that a
-          warning about the dialog lands in the column it occupies. The close
-          button is pinned in the corner over the toast's padding, so a long
-          first line needs room kept clear for it on the right. */}
-      <ToastContainer
-        position="top-center"
-        toastStyle={{
-          fontFamily: "system-ui, sans-serif",
-          fontSize: 13.5,
-          paddingRight: 30,
-        }}
-      />
-    </ReactFlowProvider>
+    <ThemeContext.Provider value={THEMES[scheme]}>
+      <ReactFlowProvider>
+        <Flow scheme={scheme} onToggleScheme={toggleScheme} />
+        {/* One container for every toast in the app. Above the import dialog's
+            backdrop (z 2000) on its own z-index, and top-centre so that a
+            warning about the dialog lands in the column it occupies. The close
+            button is pinned in the corner over the toast's padding, so a long
+            first line needs room kept clear for it on the right. */}
+        <ToastContainer
+          position="top-center"
+          theme={scheme}
+          toastStyle={{
+            fontFamily: "system-ui, sans-serif",
+            fontSize: 13.5,
+            paddingRight: 30,
+          }}
+        />
+      </ReactFlowProvider>
+    </ThemeContext.Provider>
   );
 }

@@ -2,9 +2,8 @@ import { useCallback } from "react";
 import type { CSSProperties } from "react";
 import { useReactFlow, NodeResizer } from "@xyflow/react";
 import type { NodeProps } from "@xyflow/react";
-import { LIGHT } from "../theme.ts";
 import EditableLabel from "./EditableLabel.tsx";
-import { Anchors, nodeTheme } from "./chrome.tsx";
+import { Anchors, useNodeTheme } from "./chrome.tsx";
 import type { NodeData, OrdoEdge, OrdoNode } from "../types.ts";
 
 // Stacked sections with independent content — UML class, ER entity, record.
@@ -30,7 +29,7 @@ export default function CompartmentNode({
   selected,
 }: NodeProps<OrdoNode>) {
   const { setNodes } = useReactFlow<OrdoNode, OrdoEdge>();
-  const theme = nodeTheme(selected);
+  const theme = useNodeTheme(selected);
   const sections = data.sections ?? [["field: type"], ["method()"]];
 
   const patch = useCallback(
@@ -67,11 +66,11 @@ export default function CompartmentNode({
           width: "100%",
           boxSizing: "border-box",
           border: `1.5px solid ${theme["node.stroke"]}`,
-          background: LIGHT["node.fill"],
+          background: theme["node.fill"],
           borderRadius: 3,
           overflow: "hidden",
           position: "relative",
-          color: LIGHT["node.ink"],
+          color: theme["node.ink"],
         }}
       >
         <div
@@ -82,7 +81,7 @@ export default function CompartmentNode({
             fontSize: 13.5,
             padding: "5px 9px",
             borderBottom: `1.5px solid ${theme["node.stroke"]}`,
-            background: LIGHT["node.shade"],
+            background: theme["node.shade"],
           }}
         >
           <EditableLabel

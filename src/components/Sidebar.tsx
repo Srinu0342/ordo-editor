@@ -8,7 +8,8 @@ import {
   drawShape,
 } from "../shapes/registry.ts";
 import { opsToSvg, svgDataUri } from "../render/svgWalker.ts";
-import { LIGHT } from "../theme.ts";
+import type { Theme } from "../theme.ts";
+import { useCanvasTheme } from "../nodes/chrome.tsx";
 import { ROUTES, ROUTE_KEYS, MARKERS, MARKER_KEYS } from "../edges/index.ts";
 
 // Icon rail plus the panel it swaps. Nodes are dragged onto the canvas; edges
@@ -21,32 +22,38 @@ const RAIL_WIDTH = 48;
 const PANEL_WIDTH = 214;
 
 // Structural types get hand-written thumbnails because they are not in the
-// shape registry — they are components, not `shape` values.
-const STRUCTURAL = [
+// shape registry — they are components, not `shape` values. They paint with
+// the canvas's own tokens, so each reads as the node it drops in either scheme.
+const STRUCTURAL: { kind: string; label: string; svg: (t: Theme) => string }[] = [
   {
     kind: "container",
     label: "Group",
-    svg: '<rect x="2" y="5" width="52" height="26" rx="3" fill="none" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="3 3"/><rect x="8" y="12" width="17" height="11" rx="2" fill="#fff" stroke="#94a3b8" stroke-width="1.3"/><rect x="31" y="12" width="17" height="11" rx="2" fill="#fff" stroke="#94a3b8" stroke-width="1.3"/>',
+    svg: (t) =>
+      `<rect x="2" y="5" width="52" height="26" rx="3" fill="none" stroke="${t["node.stroke"]}" stroke-width="1.4" stroke-dasharray="3 3"/><rect x="8" y="12" width="17" height="11" rx="2" fill="${t["node.fill"]}" stroke="${t["node.stroke"]}" stroke-width="1.3"/><rect x="31" y="12" width="17" height="11" rx="2" fill="${t["node.fill"]}" stroke="${t["node.stroke"]}" stroke-width="1.3"/>`,
   },
   {
     kind: "compartment",
     label: "Class",
-    svg: '<rect x="8" y="3" width="40" height="30" fill="#fff" stroke="#94a3b8" stroke-width="1.4"/><path d="M8 13H48M8 24H48" stroke="#cbd5e1" stroke-width="1.2"/>',
+    svg: (t) =>
+      `<rect x="8" y="3" width="40" height="30" fill="${t["node.fill"]}" stroke="${t["node.stroke"]}" stroke-width="1.4"/><path d="M8 13H48M8 24H48" stroke="${t["node.rule"]}" stroke-width="1.2"/>`,
   },
   {
     kind: "label",
     label: "Text",
-    svg: '<path d="M10 14H46M10 23H34" stroke="#94a3b8" stroke-width="1.6" stroke-linecap="round"/>',
+    svg: (t) =>
+      `<path d="M10 14H46M10 23H34" stroke="${t["node.stroke"]}" stroke-width="1.6" stroke-linecap="round"/>`,
   },
   {
     kind: "tube",
     label: "Timeline tube — drop it on an edge to ride it",
-    svg: '<rect x="23.5" y="3" width="9" height="30" rx="4.5" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.4"/><path d="M25 8h6M25 18h6M25 28h6" stroke="#cbd5e1" stroke-width="1.2"/>',
+    svg: (t) =>
+      `<rect x="23.5" y="3" width="9" height="30" rx="4.5" fill="${t["node.shade"]}" stroke="${t["node.stroke"]}" stroke-width="1.4"/><path d="M25 8h6M25 18h6M25 28h6" stroke="${t["node.rule"]}" stroke-width="1.2"/>`,
   },
   {
     kind: "fragment",
     label: "Fragment — loop, alt, opt, par frame for sequence diagrams",
-    svg: '<rect x="3" y="4" width="50" height="28" rx="1" fill="none" stroke="#94a3b8" stroke-width="1.4"/><path d="M3 4h17v6l-3 3H3z" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.2"/><path d="M3 22H53" stroke="#94a3b8" stroke-width="1.1" stroke-dasharray="3 2.5"/>',
+    svg: (t) =>
+      `<rect x="3" y="4" width="50" height="28" rx="1" fill="none" stroke="${t["node.stroke"]}" stroke-width="1.4"/><path d="M3 4h17v6l-3 3H3z" fill="${t["node.shade"]}" stroke="${t["node.stroke"]}" stroke-width="1.2"/><path d="M3 22H53" stroke="${t["node.stroke"]}" stroke-width="1.1" stroke-dasharray="3 2.5"/>`,
   },
 ];
 
@@ -56,7 +63,7 @@ const wrapSvg = (body: string) =>
 // THE payoff of the op-list: the palette renders through the headless walker.
 // Every swatch you see is proof the no-DOM renderer works, and any divergence
 // between it and the canvas shows up here first rather than in a CI diff.
-function shapePreview(key: string) {
+function shapePreview(key: string, theme: Theme) {
   const [w, h] = defaultSize(key);
   const s = Math.min(48 / w, 28 / h);
   const pw = w * s;
@@ -64,7 +71,7 @@ function shapePreview(key: string) {
   const body = opsToSvg(drawShape(key, pw, ph), {
     width: pw,
     height: ph,
-    theme: LIGHT,
+    theme,
     pad: 1.5,
   }).replace(/^<svg[^>]*>|<\/svg>$/g, "");
   const dx = (56 - pw) / 2;
@@ -118,7 +125,7 @@ const sectionTitle: CSSProperties = {
   fontSize: 10.5,
   letterSpacing: ".08em",
   textTransform: "uppercase",
-  color: "#94a3b8",
+  color: "var(--ui-faint)",
   fontWeight: 600,
   margin: "12px 0 6px",
 };
@@ -140,9 +147,9 @@ function Swatch({
       title={title}
       onDragStart={onDragStart}
       style={{
-        border: "1px solid #e2e8f0",
+        border: "1px solid var(--ui-border)",
         borderRadius: 5,
-        background: "#fff",
+        background: "var(--ui-surface)",
         cursor: "grab",
         display: "grid",
         placeItems: "center",
@@ -176,18 +183,19 @@ export default function Sidebar({
   const [q, setQ] = useState("");
   const [isCollapsed, setIsCollapsed] = useState(false);
   const { getViewport, setViewport } = useReactFlow();
+  const theme = useCanvasTheme();
   const asideRef = useRef<HTMLElement>(null);
   const shedWidth = useRef(0);
 
-  // Previews are pure functions of the registry, so they are built once and
-  // reused for the life of the session.
+  // Previews are pure functions of the registry and the theme, so they are
+  // built once per colour scheme rather than on every render.
   const previews = useMemo(() => {
     const out: Record<string, string> = {};
     for (const key of Object.keys(SHAPES))
-      out[key] = svgDataUri(shapePreview(key));
-    for (const s of STRUCTURAL) out[s.kind] = svgDataUri(wrapSvg(s.svg));
+      out[key] = svgDataUri(shapePreview(key, theme));
+    for (const s of STRUCTURAL) out[s.kind] = svgDataUri(wrapSvg(s.svg(theme)));
     return out;
-  }, []);
+  }, [theme]);
 
   const needle = q.trim().toLowerCase();
   const match = (key: string, label: string) =>
@@ -247,13 +255,13 @@ export default function Sidebar({
       <nav
         style={{
           width: RAIL_WIDTH,
-          borderRight: "1px solid #e2e8f0",
+          borderRight: "1px solid var(--ui-border)",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           gap: 6,
           paddingTop: 10,
-          background: "#f8fafc",
+          background: "var(--ui-surface-sunken)",
         }}
       >
         <button
@@ -272,7 +280,7 @@ export default function Sidebar({
             cursor: "pointer",
             border: "1px solid transparent",
             background: "transparent",
-            color: "#64748b",
+            color: "var(--ui-muted)",
           }}
         >
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -303,9 +311,9 @@ export default function Sidebar({
                 placeItems: "center",
                 borderRadius: 6,
                 cursor: "pointer",
-                border: active ? "1px solid #6366f1" : "1px solid transparent",
-                background: active ? "#eef2ff" : "transparent",
-                color: active ? "#4338ca" : "#64748b",
+                border: active ? "1px solid var(--ui-accent)" : "1px solid transparent",
+                background: active ? "var(--ui-accent-soft)" : "transparent",
+                color: active ? "var(--ui-accent-ink)" : "var(--ui-muted)",
               }}
             >
               {r.icon}
@@ -320,7 +328,7 @@ export default function Sidebar({
         style={{
           width: PANEL_WIDTH,
           padding: "10px 12px 12px",
-          borderRight: "1px solid #e2e8f0",
+          borderRight: "1px solid var(--ui-border)",
           display: isCollapsed ? "none" : "flex",
           flexDirection: "column",
           overflowY: "auto",
@@ -341,9 +349,9 @@ export default function Sidebar({
                 font: "inherit",
                 fontSize: 12.5,
                 padding: "6px 8px",
-                border: "1px solid #cbd5e1",
+                border: "1px solid var(--ui-border-strong)",
                 borderRadius: 5,
-                background: "#fff",
+                background: "var(--ui-surface)",
               }}
             />
 
@@ -390,7 +398,7 @@ export default function Sidebar({
             ))}
 
             {total === 0 && (
-              <div style={{ color: "#94a3b8", fontSize: 12, marginTop: 14 }}>
+              <div style={{ color: "var(--ui-faint)", fontSize: 12, marginTop: 14 }}>
                 No shape matches “{q}”.
               </div>
             )}
@@ -413,8 +421,8 @@ export default function Sidebar({
                       alignItems: "center",
                       gap: 9,
                       padding: "6px 8px",
-                      border: `1px solid ${active ? "#6366f1" : "#cbd5e1"}`,
-                      background: active ? "#eef2ff" : "#fff",
+                      border: `1px solid ${active ? "var(--ui-accent)" : "var(--ui-border-strong)"}`,
+                      background: active ? "var(--ui-accent-soft)" : "var(--ui-surface)",
                       borderRadius: 5,
                       cursor: "pointer",
                       font: "inherit",
@@ -422,7 +430,13 @@ export default function Sidebar({
                       textAlign: "left",
                     }}
                   >
-                    <svg width="42" height="18" viewBox="0 0 42 18" fill="none">
+                    <svg
+                      width="42"
+                      height="18"
+                      viewBox="0 0 42 18"
+                      fill="none"
+                      style={{ color: "var(--ui-ink-3)" }}
+                    >
                       <path
                         d={
                           k === "straight"
@@ -433,12 +447,12 @@ export default function Sidebar({
                                 ? "M2 14 H19 V5 H36"
                                 : "M2 14 H15 Q19 14 19 10 V9 Q19 5 23 5 H36"
                         }
-                        stroke="#475569"
+                        stroke="currentColor"
                         strokeWidth="1.5"
                         strokeLinecap="round"
                         strokeLinejoin="round"
                       />
-                      <path d="M34 2.5 L39.5 5 L34 7.5 Z" fill="#475569" />
+                      <path d="M34 2.5 L39.5 5 L34 7.5 Z" fill="currentColor" />
                     </svg>
                     {ROUTES[k].label}
                   </button>
@@ -447,7 +461,7 @@ export default function Sidebar({
             </div>
 
             <div style={sectionTitle}>End markers</div>
-            <div style={{ fontSize: 11.5, color: "#64748b", lineHeight: 1.5 }}>
+            <div style={{ fontSize: 11.5, color: "var(--ui-muted)", lineHeight: 1.5 }}>
               Set per end in the toolbar. {MARKER_KEYS.length} available across
               flowchart, UML and ER cardinality.
             </div>
@@ -468,8 +482,8 @@ export default function Sidebar({
                     alignItems: "center",
                     gap: 5,
                     fontSize: 10.5,
-                    color: "#64748b",
-                    border: "1px solid #eef2f6",
+                    color: "var(--ui-muted)",
+                    border: "1px solid var(--ui-border-faint)",
                     borderRadius: 4,
                     padding: "3px 5px",
                     minWidth: 0,
@@ -484,12 +498,13 @@ export default function Sidebar({
                         flex: "0 0 auto",
                         // the same marker elements, drawn with literal colours
                         // instead of the edge's context-stroke
-                        "--mk-line": "#475569",
-                        "--mk-solid": "#475569",
+                        "--mk-line": "var(--ui-ink-3)",
+                        "--mk-solid": "var(--ui-ink-3)",
+                        "--mk-hollow": "var(--ui-surface)",
                       } as CSSProperties
                     }
                   >
-                    <path d="M1 6 H13" stroke="#475569" strokeWidth="1.4" />
+                    <path d="M1 6 H13" style={{ stroke: "var(--ui-ink-3)" }} strokeWidth="1.4" />
                     <g
                       transform={`translate(${25 - MARKERS[k].refX} ${6 - MARKERS[k].h / 2})`}
                     >

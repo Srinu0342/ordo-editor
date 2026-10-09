@@ -26,7 +26,7 @@ export const LIGHT: Theme = {
 
   "edge.stroke": "#0f172a",
   "canvas.bg": "#ffffff",
-  "canvas.grid": "#e2e8f0",
+  "canvas.grid": "#eeeeee",
 };
 
 export const DARK: Theme = {
