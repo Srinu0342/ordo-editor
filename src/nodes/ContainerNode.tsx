@@ -76,7 +76,7 @@ export default function ContainerNode({
             placeholder="group"
           />
         </div>
-        <Anchors />
+        <Anchors selected={selected} />
       </div>
     </>
   );

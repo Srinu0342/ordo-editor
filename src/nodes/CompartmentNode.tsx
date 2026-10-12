@@ -128,7 +128,7 @@ export default function CompartmentNode({
             ))}
           </div>
         ))}
-        <Anchors />
+        <Anchors selected={selected} />
       </div>
     </>
   );

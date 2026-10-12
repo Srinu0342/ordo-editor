@@ -10,7 +10,7 @@ import {
 } from "@xyflow/react";
 import type { NodeProps } from "@xyflow/react";
 import { walk } from "../render/reactWalker.tsx";
-import { useNodeTheme } from "./chrome.tsx";
+import { useAnchorStyle, useNodeTheme } from "./chrome.tsx";
 import {
   TUBE_SIZE,
   drawTube,
@@ -104,6 +104,7 @@ export default function TubeNode({
   const angle = norm(base + rotation);
 
   const theme = useNodeTheme(selected);
+  const anchor = useAnchorStyle(selected);
   const { marks } = useMemo(
     () =>
       walk(
@@ -314,13 +315,13 @@ export default function TubeNode({
                 id={`a${i}`}
                 type="source"
                 position={Position.Left}
-                style={{ top }}
+                style={{ top, ...anchor(`a${i}`) }}
               />
               <Handle
                 id={`b${i}`}
                 type="source"
                 position={Position.Right}
-                style={{ top }}
+                style={{ top, ...anchor(`b${i}`) }}
               />
             </Fragment>
           );
@@ -328,8 +329,18 @@ export default function TubeNode({
 
         {/* The ends chain one tube to the next. Named for the tube rather than
             the compass, because neither end stays north for long. */}
-        <Handle id="head" type="source" position={Position.Top} />
-        <Handle id="tail" type="source" position={Position.Bottom} />
+        <Handle
+          id="head"
+          type="source"
+          position={Position.Top}
+          style={anchor("head")}
+        />
+        <Handle
+          id="tail"
+          type="source"
+          position={Position.Bottom}
+          style={anchor("tail")}
+        />
       </div>
     </>
   );

@@ -154,3 +154,26 @@ export function defaultEnds(
   const t = pinned.target ? undefined : at(target, to);
   return { ...(s ? { source: s } : {}), ...(t ? { target: t } : {}) };
 }
+
+/**
+ * The handle each end of an edge is actually drawn from: the one it names, or
+ * for an end that names none, the anchor defaultEnds puts it on — and where
+ * that does not apply (a node unknown, or no anchor on the face), the first
+ * handle, which is where React Flow then draws it. Answers which anchors carry
+ * an edge, so the canvas can show those and hide the rest (nodes/chrome.tsx).
+ */
+export function endHandles(
+  source: NodeBox | undefined,
+  target: NodeBox | undefined,
+  named: { sourceHandle?: string | null; targetHandle?: string | null },
+): [source: string | undefined, target: string | undefined] {
+  const [from, to] =
+    source && target ? handlesFor(centreOf(source), centreOf(target)) : [];
+  const on = (node: NodeBox | undefined, face: Face | undefined) =>
+    (node?.handles.find((h) => h.id === face) ?? node?.handles[0])?.id ??
+    undefined;
+  return [
+    named.sourceHandle ?? on(source, from),
+    named.targetHandle ?? on(target, to),
+  ];
+}

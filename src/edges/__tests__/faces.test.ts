@@ -8,6 +8,7 @@ import { Position } from "@xyflow/react";
 import {
   anchorPoint,
   defaultEnds,
+  endHandles,
   handlesFor,
   nodeBox,
 } from "../faces.ts";
@@ -228,6 +229,35 @@ test("only the ends that name no handle are placed, and only on an anchor that e
   assert.deepEqual(defaultEnds(right, box(0, 0, 26, 220, []), { source: false, target: false }), {
     source: { x: 396, y: 24, position: Position.Left },
   });
+});
+
+test("the handle an end is drawn from: the one it names, else the anchor defaultEnds picks", () => {
+  const left = box(0, 0, 160, 48);
+  const right = box(400, 0, 160, 48);
+  const free = { sourceHandle: null, targetHandle: null };
+
+  assert.deepEqual(endHandles(left, right, { sourceHandle: "n", targetHandle: "s" }), ["n", "s"], "both pinned");
+  assert.deepEqual(endHandles(left, right, free), ["e", "w"], "both free: face to face");
+  assert.deepEqual(endHandles(right, left, { sourceHandle: "s" }), ["s", "e"], "one pinned, the other free");
+  assert.deepEqual(endHandles(left, left, free), ["s", "n"], "self-loop");
+
+  // The same ends defaultEnds places, on the same anchors.
+  for (const [a, b] of [[left, right], [right, left], [left, box(0, 300, 160, 48)]]) {
+    const ends = defaultEnds(a, b, { source: false, target: false });
+    const [from, to] = endHandles(a, b, free);
+    assert.deepEqual(ends.source, anchorPoint(a, a.handles.find((h) => h.id === from)!));
+    assert.deepEqual(ends.target, anchorPoint(b, b.handles.find((h) => h.id === to)!));
+  }
+
+  // Where defaultEnds stands aside, React Flow draws from the node's first
+  // handle: a node with no anchor on the face, or a node not known yet.
+  const tube = box(0, 0, 26, 220, [
+    { id: "a0", x: -3, y: 50, width: 6, height: 10, position: Position.Left },
+    { id: "b0", x: 23, y: 50, width: 6, height: 10, position: Position.Right },
+  ]);
+  assert.deepEqual(endHandles(right, tube, free), ["w", "a0"], "no anchor on the face");
+  assert.deepEqual(endHandles(undefined, right, free), [undefined, "n"], "source unknown");
+  assert.deepEqual(endHandles(box(0, 0, 20, 20, []), right, free), [undefined, "w"], "no handles at all");
 });
 
 test("a self-loop on default handles leaves the bottom and comes back in at the top", () => {

@@ -86,7 +86,7 @@ export default function LabelNode({ id, data, selected }: NodeProps<OrdoNode>) {
         grab
         multiline
       />
-      <Anchors />
+      <Anchors selected={selected} />
     </div>
   );
 }

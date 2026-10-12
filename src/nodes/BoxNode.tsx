@@ -77,7 +77,7 @@ export default function BoxNode({
           </div>
         ))}
 
-        <Anchors />
+        <Anchors selected={selected} />
       </div>
     </>
   );
