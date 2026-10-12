@@ -2,6 +2,8 @@ import { useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { Panel } from "@xyflow/react";
 import {
+  ALIGN_LABELS,
+  TEXT_ALIGNS,
   TEXT_SIZE_MAX,
   TEXT_SIZE_MIN,
   TEXT_WEIGHTS,
@@ -9,13 +11,14 @@ import {
   clampTextSize,
   weightValue,
 } from "../textStyle.ts";
-import type { TextSummary, TextWeight } from "../textStyle.ts";
+import type { TextAlign, TextSummary, TextWeight } from "../textStyle.ts";
 
 // The text bar: how big and how heavy the selection's text is. It shows over
 // the canvas whenever something with text is selected — nodes and lines alike,
 // so one bar restyles a mixed selection — and acts on all of it at once. The
 // steppers move each item from its own size, so a title stays bigger than the
-// body text selected with it; typing a size sets them all to it.
+// body text selected with it; typing a size sets them all to it. While the
+// selection holds a text node, the bar also lines up its lines.
 
 const bar: CSSProperties = {
   display: "flex",
@@ -52,6 +55,13 @@ const Divider = () => (
   />
 );
 
+// Three rules of a paragraph, run from the side the button aligns to.
+const ALIGN_ICON: Record<TextAlign, string> = {
+  left: "M2 3.5h10M2 7h6.5M2 10.5h8.5",
+  center: "M2 3.5h10M3.75 7h6.5M2.75 10.5h8.5",
+  right: "M2 3.5h10M5.5 7h6.5M3.5 10.5h8.5",
+};
+
 const Caption = ({ children }: { children: ReactNode }) => (
   <span
     style={{
@@ -72,13 +82,15 @@ export default function TextStyle({
   onStep,
   onSize,
   onWeight,
+  onAlign,
   onReset,
 }: {
   text: TextSummary;
   onStep: (delta: number) => void; // each item from its own size
   onSize: (size: number) => void; // every item to this size
   onWeight: (weight: TextWeight) => void;
-  onReset: () => void; // back to each kind's own size and weight
+  onAlign: (align: TextAlign) => void; // the text nodes among them
+  onReset: () => void; // back to each kind's own size, weight and alignment
 }) {
   // While the size field has focus it shows what is being typed; otherwise
   // the selection's size, or nothing when the items differ.
@@ -175,12 +187,38 @@ export default function TextStyle({
           </button>
         ))}
 
+        {text.alignable > 0 && (
+          <>
+            <Divider />
+            {TEXT_ALIGNS.map((a) => (
+              <button
+                key={a}
+                type="button"
+                title={ALIGN_LABELS[a]}
+                aria-label={ALIGN_LABELS[a]}
+                aria-pressed={text.align === a}
+                onClick={() => onAlign(a)}
+                style={{ ...button(text.align === a), padding: 0 }}
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
+                  <path
+                    d={ALIGN_ICON[a]}
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </button>
+            ))}
+          </>
+        )}
+
         {text.restyled && (
           <>
             <Divider />
             <button
               type="button"
-              title="Back to each item's own size and weight"
+              title="Back to each item's own size, weight and alignment"
               onClick={onReset}
               style={{ ...button(), color: "var(--ui-muted)" }}
             >

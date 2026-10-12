@@ -152,7 +152,8 @@ function OrdoEdge({
               background: theme["node.fill"],
               border: `1px solid ${theme["node.rule"]}`,
               color: theme["node.ink"],
-              borderRadius: 999,
+              // a pill for one line; a pill two lines tall reads as a lozenge
+              borderRadius: label.includes("\n") ? 8 : 999,
               padding: "2px 8px",
               lineHeight: 1.4,
             }}

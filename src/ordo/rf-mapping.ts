@@ -50,7 +50,8 @@ import {
 //   edge route    edge.type (edges/routers.ts)
 //   edge label    data.label, "" for none; data.labelPlacement
 //   text style    data.textSize / data.textWeight on a node or an edge, as
-//                 the file spells them; absent means the kind's own font
+//                 the file spells them; absent means the kind's own font.
+//                 data.textAlign on a text node; absent means left
 //   markers       data.markerStart / data.markerEnd, edges/markers.tsx keys
 //   line          style: stroke colour, width and a dash pattern
 //   handles       the compass anchors n, e, s, w (nodes/chrome.tsx), named
@@ -216,6 +217,7 @@ const DASHES: Record<OrdoLine, string> = {
 const CARRIED = [
   "textSize",
   "textWeight",
+  "textAlign",
   "collapsed",
   "members",
   "mermaid",

@@ -68,9 +68,15 @@ import {
   fontOf,
   summarizeText,
   weightName,
+  withTextAlign,
   withTextStyle,
 } from "./textStyle.ts";
-import type { Font, TextStyle as OwnText, TextWeight } from "./textStyle.ts";
+import type {
+  Font,
+  TextAlign,
+  TextStyle as OwnText,
+  TextWeight,
+} from "./textStyle.ts";
 import type { EdgeStyle } from "./edgeStyle.ts";
 import {
   IMPORTABLE,
@@ -93,7 +99,11 @@ import { useHistory, isTyping } from "./useHistory.ts";
 import { useColorScheme } from "./colorScheme.ts";
 import type { Scheme } from "./colorScheme.ts";
 import { THEMES } from "./theme.ts";
-import { ThemeContext, useCanvasTheme } from "./nodes/chrome.tsx";
+import {
+  EditRequestContext,
+  ThemeContext,
+  useCanvasTheme,
+} from "./nodes/chrome.tsx";
 import { detectKind, emptySession, idMinter, mintId } from "./ordo/index.ts";
 import type { OrdoSession } from "./ordo/index.ts";
 import { connectionEdge } from "./ordo/rf-mapping.ts";
@@ -221,6 +231,12 @@ function Flow({
   // file's comments never leak into a new diagram.
   const [session, setSession] = useState<OrdoSession>(() => emptySession());
   const [guides, setGuides] = useState<Guide[]>([]);
+  // The text node to open for typing once it has mounted (see chrome.tsx).
+  const [editRequest, setEditRequest] = useState<string | null>(null);
+  const editRequestValue = useMemo(
+    () => ({ id: editRequest, clear: () => setEditRequest(null) }),
+    [editRequest],
+  );
 
   const { screenToFlowPosition, toObject, getInternalNode, fitView, getZoom } =
     useReactFlow<OrdoNode, OrdoEdge>();
@@ -349,7 +365,9 @@ function Flow({
       summarizeText([
         ...nodes.flatMap((n) => {
           const base = n.selected ? baseFont(n) : null;
-          return base ? [{ base, own: n.data }] : [];
+          return base
+            ? [{ base, own: n.data, alignable: n.type === "label" }]
+            : [];
         }),
         ...edges
           .filter((e) => e.selected)
@@ -402,7 +420,22 @@ function Flow({
     restyleText((f) => ({ ...keep(f), textSize: size }));
   const setTextWeight = (textWeight: TextWeight) =>
     restyleText((f) => ({ ...keep(f), textWeight }));
-  const resetText = () => restyleText(() => ({}));
+  // Only a text node has lines of its own to line up.
+  const alignText = useCallback(
+    (align?: TextAlign) =>
+      setNodes((nds) =>
+        nds.map((n) =>
+          n.selected && n.type === "label"
+            ? { ...n, data: withTextAlign(n.data, align) }
+            : n,
+        ),
+      ),
+    [setNodes],
+  );
+  const resetText = () => {
+    restyleText(() => ({}));
+    alignText(undefined);
+  };
 
   // absolute (canvas) rect of a node, using its measured size
   const absRect = useCallback(
@@ -880,6 +913,24 @@ function Flow({
   // are the ones it has no opinion about.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      // Enter opens the one selected text node for typing, as a double-click
+      // does, with its text selected. Not when it would press a focused
+      // control, the text bar's included.
+      if (
+        event.key === "Enter" &&
+        !(event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) &&
+        editingRef.current &&
+        !isTyping(event.target) &&
+        !(event.target instanceof Element && event.target.closest("button, a, select"))
+      ) {
+        const picked = graphRef.current.nodes.filter((n) => n.selected);
+        if (picked.length === 1 && picked[0].type === "label") {
+          event.preventDefault();
+          setEditRequest(picked[0].id);
+        }
+        return;
+      }
+
       if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
       const key = event.key.toLowerCase();
 
@@ -1078,9 +1129,21 @@ function Flow({
           ? nearestEdge(graphRef.current.edges, exact, SNAP_DIST)
           : null;
 
-      setNodes((nds) => {
-        const id = mintId("n", idsOf(nds, graphRef.current.edges));
+      // Text is dropped to be typed: it lands selected, alone, and open for
+      // typing with its placeholder words selected, so the first key replaces
+      // them. The id is minted here so the request can name it.
+      const typed = kind === "label";
+      const id = mintId("n", idsOf(graphRef.current.nodes, graphRef.current.edges));
+      if (typed) {
+        setEditRequest(id);
+        setEdges((eds) =>
+          eds.some((e) => e.selected)
+            ? eds.map((e) => (e.selected ? { ...e, selected: false } : e))
+            : eds,
+        );
+      }
 
+      setNodes((nds) => {
         if (hit) {
           return sortParentsFirst(
             nds.concat(
@@ -1101,22 +1164,24 @@ function Flow({
           ? null
           : groupAt({ ...position, width, height }, nds);
         const origin = parent ? absRect(parent.id) : null;
+        const node = makeNode(kind, {
+          id,
+          // a child's position is relative to its parent's top-left
+          position: origin
+            ? { x: position.x - origin.x, y: position.y - origin.y }
+            : position,
+          parentId: parent?.id,
+        });
 
         return sortParentsFirst(
-          nds.concat(
-            makeNode(kind, {
-              id,
-              // a child's position is relative to its parent's top-left
-              position: origin
-                ? { x: position.x - origin.x, y: position.y - origin.y }
-                : position,
-              parentId: parent?.id,
-            }),
-          ),
+          (typed
+            ? nds.map((n) => (n.selected ? { ...n, selected: false } : n))
+            : nds
+          ).concat(typed ? { ...node, selected: true } : node),
         );
       });
     },
-    [screenToFlowPosition, setNodes, groupAt, absRect],
+    [screenToFlowPosition, setNodes, setEdges, groupAt, absRect],
   );
 
   const trackPointer = useCallback(
@@ -1260,56 +1325,59 @@ function Flow({
 
           {ls.status === "invalid" && <LocalPanel tab={ls.tab} diagnostics={ls.diagnostics} />}
 
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            nodeTypes={nodeTypes}
-            edgeTypes={edgeTypes}
-            onNodesChange={onNodesChangeAligned}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            onNodeDrag={onNodeDrag}
-            onNodeDragStop={onNodeDragStop}
-            connectionMode={ConnectionMode.Loose}
-            // A sequence diagram is tall out of all proportion to a flowchart.
-            // React Flow's default floor of 0.5 stops fitView ever fitting one,
-            // so the canvas would open on a corner of it.
-            minZoom={0.1}
-            snapToGrid
-            snapGrid={[GRID, GRID]}
-            deleteKeyCode={["Backspace", "Delete"]}
-            // Shift-drag rubber-bands; Cmd/Ctrl-click adds to the selection.
-            // "partial" means grazing a node selects it, which is what people
-            // expect from a lasso and stops big groups being unselectable.
-            selectionKeyCode="Shift"
-            multiSelectionKeyCode={["Meta", "Control"]}
-            selectionMode={SelectionMode.Partial}
-            // React Flow's own chrome: controls, minimap, handles, the lasso.
-            colorMode={scheme}
-          >
-            {/* keeps every rider on the edge it was dropped on */}
-            <TubeFollower />
-            {textSelection.count > 0 && (
-              <TextStyle
-                text={textSelection}
-                onStep={stepTextSize}
-                onSize={setTextSize}
-                onWeight={setTextWeight}
-                onReset={resetText}
-              />
-            )}
-            <AlignmentGuides guides={guides} />
+          <EditRequestContext.Provider value={editRequestValue}>
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              nodeTypes={nodeTypes}
+              edgeTypes={edgeTypes}
+              onNodesChange={onNodesChangeAligned}
+              onEdgesChange={onEdgesChange}
+              onConnect={onConnect}
+              onNodeDrag={onNodeDrag}
+              onNodeDragStop={onNodeDragStop}
+              connectionMode={ConnectionMode.Loose}
+              // A sequence diagram is tall out of all proportion to a flowchart.
+              // React Flow's default floor of 0.5 stops fitView ever fitting one,
+              // so the canvas would open on a corner of it.
+              minZoom={0.1}
+              snapToGrid
+              snapGrid={[GRID, GRID]}
+              deleteKeyCode={["Backspace", "Delete"]}
+              // Shift-drag rubber-bands; Cmd/Ctrl-click adds to the selection.
+              // "partial" means grazing a node selects it, which is what people
+              // expect from a lasso and stops big groups being unselectable.
+              selectionKeyCode="Shift"
+              multiSelectionKeyCode={["Meta", "Control"]}
+              selectionMode={SelectionMode.Partial}
+              // React Flow's own chrome: controls, minimap, handles, the lasso.
+              colorMode={scheme}
+            >
+              {/* keeps every rider on the edge it was dropped on */}
+              <TubeFollower />
+              {textSelection.count > 0 && (
+                <TextStyle
+                  text={textSelection}
+                  onStep={stepTextSize}
+                  onSize={setTextSize}
+                  onWeight={setTextWeight}
+                  onAlign={alignText}
+                  onReset={resetText}
+                />
+              )}
+              <AlignmentGuides guides={guides} />
 
-            <Background
-              variant={BackgroundVariant.Lines}
-              gap={GRID}
-              size={1}
-              color={theme["canvas.grid"]}
-              bgColor={theme["canvas.bg"]}
-            />
-            <MiniMap />
-            <Controls />
-          </ReactFlow>
+              <Background
+                variant={BackgroundVariant.Lines}
+                gap={GRID}
+                size={1}
+                color={theme["canvas.grid"]}
+                bgColor={theme["canvas.bg"]}
+              />
+              <MiniMap />
+              <Controls />
+            </ReactFlow>
+          </EditRequestContext.Provider>
         </div>
       </div>
 

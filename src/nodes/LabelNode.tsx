@@ -1,11 +1,11 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useReactFlow } from "@xyflow/react";
 import type { NodeProps } from "@xyflow/react";
 import EditableLabel from "./EditableLabel.tsx";
-import { Anchors, useNodeTheme } from "./chrome.tsx";
+import { Anchors, useEditRequest, useNodeTheme } from "./chrome.tsx";
 import { TEXT_FONT, TEXT_PAD, TEXT_PLACEHOLDER } from "./defaults.ts";
 import { LINE_HEIGHT } from "../measure.ts";
-import { fontOf } from "../textStyle.ts";
+import { alignOf, fontOf } from "../textStyle.ts";
 import type { OrdoEdge, OrdoNode } from "../types.ts";
 
 // Text with no frame. The degenerate case: there is no outline for an edge to
@@ -16,11 +16,18 @@ import type { OrdoEdge, OrdoNode } from "../types.ts";
 // The node is given no size (see TEXT_FONT): it is exactly as big as its
 // words, so an edge ends a few px from the text rather than at the side of an
 // invisible box. Should a size reach it anyway, the text sits in its middle.
+//
+// It takes as many lines as it is typed with: Enter starts a new one, and
+// Escape, Cmd/Ctrl+Enter or a click away finishes. It opens for typing the
+// moment it is dropped, or on Enter while it is the one selected, with its
+// text selected so typing replaces it. Text finished empty is no text at all,
+// so the node goes, and the lines it had with it.
 
 export default function LabelNode({ id, data, selected }: NodeProps<OrdoNode>) {
-  const { setNodes } = useReactFlow<OrdoNode, OrdoEdge>();
+  const { setNodes, getNode, deleteElements } = useReactFlow<OrdoNode, OrdoEdge>();
   const theme = useNodeTheme(selected);
   const font = fontOf(TEXT_FONT, data);
+  const [editing, setEditing] = useState(false);
 
   const setLabel = useCallback(
     (value: string) =>
@@ -31,6 +38,21 @@ export default function LabelNode({ id, data, selected }: NodeProps<OrdoNode>) {
       ),
     [id, setNodes],
   );
+
+  const onEditingChange = useCallback(
+    (next: boolean) => {
+      setEditing(next);
+      if (next) return;
+      const label = getNode(id)?.data.label;
+      if (!String(label ?? "").trim()) void deleteElements({ nodes: [{ id }] });
+    },
+    [id, getNode, deleteElements],
+  );
+
+  const open = useCallback(() => setEditing(true), []);
+  useEditRequest(id, open);
+
+  const framed = selected || editing;
 
   return (
     <div
@@ -47,8 +69,8 @@ export default function LabelNode({ id, data, selected }: NodeProps<OrdoNode>) {
         fontWeight: font.weight,
         lineHeight: LINE_HEIGHT,
         color: theme["node.ink"],
-        border: `1px ${selected ? "solid" : "dashed"} ${
-          selected ? theme["node.stroke.selected"] : "transparent"
+        border: `1px ${framed ? "solid" : "dashed"} ${
+          framed ? theme["node.stroke.selected"] : "transparent"
         }`,
         borderRadius: 3,
         position: "relative",
@@ -58,7 +80,11 @@ export default function LabelNode({ id, data, selected }: NodeProps<OrdoNode>) {
         value={data.label ?? ""}
         onChange={setLabel}
         placeholder={TEXT_PLACEHOLDER}
+        editing={editing}
+        onEditingChange={onEditingChange}
+        style={{ textAlign: alignOf(data) }}
         grab
+        multiline
       />
       <Anchors />
     </div>

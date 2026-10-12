@@ -221,9 +221,22 @@ function reconcileData(doc: Document, prev: ResolvedDiagram, target: ResolvedDia
       const b = before ? (before[f] ?? defaults[f]) : defaults[f];
       const a = after[f];
       if (same(a, b)) continue;
-      if (a === undefined) deleteIn(doc, ["data", section, id, f]);
+      if (a === undefined) {
+        deleteIn(doc, ["data", section, id, f]);
+        continue;
+      }
+      const into = entry(section, id);
+      // Text of several lines is written as a block, one line of the file to
+      // each, which a one-line `{ … }` entry cannot hold: that entry opens up,
+      // and a scalar written plain or quoted forgets it, so YAML picks again.
+      if (typeof a === "string" && a.includes("\n")) {
+        into.flow = false;
+        const cur = into.get(f, true);
+        if (isScalar(cur) && cur.type !== Scalar.BLOCK_LITERAL && cur.type !== Scalar.BLOCK_FOLDED)
+          cur.type = undefined;
+      }
       // A list goes on one line, like an edge or a layout entry: taps, guards, sections.
-      else setField(entry(section, id), f, Array.isArray(a) ? doc.createNode(a, { flow: true }) : a, fields);
+      setField(into, f, Array.isArray(a) ? doc.createNode(a, { flow: true }) : a, fields);
     }
   };
 

@@ -1,5 +1,5 @@
 import type { Edge, Node } from "@xyflow/react";
-import type { TextWeight } from "./ordo/types.ts";
+import type { TextAlign, TextWeight } from "./ordo/types.ts";
 
 // The document model: what a node and an edge carry, in one place.
 //
@@ -31,6 +31,8 @@ export type NodeData = {
   // …and its own size and weight, when not the kind's (see textStyle.ts)
   textSize?: number;
   textWeight?: TextWeight;
+  // label: the side its lines line up on, when not left
+  textAlign?: TextAlign;
   // box: the registry key it is drawn with
   shape?: string;
 

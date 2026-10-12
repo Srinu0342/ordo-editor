@@ -55,6 +55,10 @@ export type TextWeight = (typeof TEXT_WEIGHTS)[number];
 export const TEXT_SIZE_MIN = 8;
 export const TEXT_SIZE_MAX = 72;
 
+/** Which side a text node's lines line up on. Only a text node has lines of its own to align. */
+export const TEXT_ALIGNS = ["left", "center", "right"] as const;
+export type TextAlign = (typeof TEXT_ALIGNS)[number];
+
 // ---------- structure document: structure and content ----------
 
 /** Stable key for a node or edge. Never derived from a label, never rewritten by the canvas. */
@@ -73,6 +77,7 @@ export interface OrdoNodeData {
   // what the kind (or a box's shape) draws its text in
   textSize?: number;
   textWeight?: TextWeight;
+  textAlign?: TextAlign; // text only; default: left
 
   // group
   collapsed?: boolean; // a subgraph Mermaid sent collapsed…
@@ -161,6 +166,7 @@ export type NodeFields = Pick<
   OrdoNodeData,
   | "textSize"
   | "textWeight"
+  | "textAlign"
   | "collapsed"
   | "members"
   | "mermaid"
@@ -267,7 +273,7 @@ export const LABELLED: ReadonlySet<OrdoKind> = new Set(["box", "group", "text", 
 export const KIND_FIELDS: Record<OrdoKind, readonly (keyof OrdoNodeData)[]> = {
   box: ["kind", "shape", "textSize", "textWeight"],
   group: ["collapsed", "members", "mermaid", "textSize", "textWeight"],
-  text: ["kind", "textSize", "textWeight"],
+  text: ["kind", "textSize", "textWeight", "textAlign"],
   class: ["kind", "sections", "textSize", "textWeight"],
   tube: ["kind", "slots", "taps", "variant", "attach", "align"],
   fragment: ["kind", "operator", "guards", "dividers", "fill"],
@@ -281,6 +287,7 @@ export const NODE_FIELD_ORDER = [
   "type",
   "textSize",
   "textWeight",
+  "textAlign",
   "collapsed",
   "members",
   "mermaid",

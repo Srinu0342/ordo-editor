@@ -41,10 +41,13 @@ const STRUCTURAL: { kind: string; label: string; svg: (t: Theme) => string }[] =
       `<rect x="8" y="3" width="40" height="30" fill="${t["node.fill"]}" stroke="${t["node.stroke"]}" stroke-width="1.4"/><path d="M8 13H48M8 24H48" stroke="${t["node.rule"]}" stroke-width="1.2"/>`,
   },
   {
+    // A capital T beside a caret: the mark every editor puts on its type tool.
+    // Muted ink keeps it the weight of the swatches beside it; the caret is in
+    // the selection colour a text node is framed in while it is typed into.
     kind: "label",
-    label: "Text",
+    label: "Text — words of their own, on as many lines as you type",
     svg: (t) =>
-      `<path d="M10 14H46M10 23H34" stroke="${t["node.stroke"]}" stroke-width="1.6" stroke-linecap="round"/>`,
+      `<path d="M14 6H36V12.5H34.8L33.6 9.5H26.8V27L29.8 28V30H20.2V28L23.2 27V9.5H16.4L15.2 12.5H14Z" fill="${t["node.ink.muted"]}"/><path d="M40.5 7V29M38.3 7H42.7M38.3 29H42.7" stroke="${t["node.stroke.selected"]}" stroke-width="1.5" stroke-linecap="round"/>`,
   },
   {
     kind: "tube",

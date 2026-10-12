@@ -402,6 +402,73 @@ test("a text node is as big as its text: no size on the canvas, none in the file
   assert.match(out.layout!.text, /note: \{ x: 10, y: 20 \}/);
 });
 
+const LINES = [
+  "ordo: 1",
+  "nodes:",
+  "  - note",
+  "data:",
+  "  nodes:",
+  "    note:",
+  "      kind: text",
+  "      label: |-",
+  "        Guest checkout",
+  "        is allowed",
+  "          when the cart is small",
+  "      textAlign: center",
+  "",
+].join("\n");
+
+test("a text node keeps its lines and its alignment, written as a block", () => {
+  const result = importOrdo(LINES);
+  assert.deepEqual(result.diagnostics, []);
+  const note = result.nodes[0];
+  assert.equal(note.data.label, "Guest checkout\nis allowed\n  when the cart is small");
+  assert.equal(note.data.textAlign, "center");
+  // three lines tall before it is measured, and as wide as its widest
+  const [w, h] = sizeOfNode(note);
+  assert.deepEqual([w, h], textSize("Guest checkout\nis allowed\n  when the cart is small"));
+  assert.ok(h > 2 * textSize("one line")[1]);
+
+  const out = exportOrdo(result.nodes, result.edges, { name: "l", ordo: result.ordo, layout: result.layout });
+  assert.deepEqual(out.diagnostics, []);
+  assert.equal(out.ordo!.text, LINES);
+
+  // left is where lines run from anyway, so going back to it drops the field;
+  // a line typed on the canvas lands in the block
+  const typed = result.nodes.map((n) => {
+    const { textAlign: _align, ...data } = n.data;
+    return { ...n, data: { ...data, label: `${n.data.label}\nand a fourth` } };
+  });
+  const again = exportOrdo(typed, result.edges, { name: "l", ordo: result.ordo, layout: result.layout });
+  assert.equal(
+    again.ordo!.text,
+    LINES.replace("      textAlign: center\n", "").replace(
+      "when the cart is small\n",
+      "when the cart is small\n        and a fourth\n",
+    ),
+  );
+});
+
+test("a second line typed into a one-line entry opens it up into a block", () => {
+  const file = "ordo: 1\nnodes:\n  - api\n  - db\ndata:\n  nodes:\n    api: { label: API }\n    db: { label: DB }\n";
+  const result = importOrdo(file);
+  const nodes = result.nodes.map((n) => (n.id === "api" ? { ...n, data: { ...n.data, label: "API\nv2" } } : n));
+  const out = exportOrdo(nodes, result.edges, { name: "b", ordo: result.ordo, layout: result.layout });
+  assert.deepEqual(out.diagnostics, []);
+  assert.equal(out.ordo!.text, file.replace("    api: { label: API }\n", "    api:\n      label: |-\n        API\n        v2\n"));
+  assert.equal(importOrdo(out.ordo!.text).nodes[0].data.label, "API\nv2");
+});
+
+test("alignment is checked: a known side, and only on a text node", () => {
+  const codes = (text: string) => readDiagram(text).diagnostics.map((d) => [d.code, d.message]);
+  assert.deepEqual(codes(LINES.replace("textAlign: center", "textAlign: justify")), [
+    ["schema", "data.nodes.note.textAlign: must be equal to one of the allowed values"],
+  ]);
+  assert.deepEqual(codes("ordo: 1\nnodes: [b]\ndata:\n  nodes:\n    b: { textAlign: center }\n"), [
+    ["kind-field", 'box "b" has no field "textAlign"'],
+  ]);
+});
+
 const STYLED = [
   "ordo: 1",
   "nodes:",

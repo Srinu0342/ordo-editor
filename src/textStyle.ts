@@ -5,16 +5,21 @@
 // in its data overrides it. Absent means "the kind's own", so a diagram nobody
 // restyled writes nothing, and a change to a kind's font reaches it.
 
-import { TEXT_SIZE_MAX, TEXT_SIZE_MIN, TEXT_WEIGHTS } from "./ordo/types.ts";
-import type { TextWeight } from "./ordo/types.ts";
+import { TEXT_ALIGNS, TEXT_SIZE_MAX, TEXT_SIZE_MIN, TEXT_WEIGHTS } from "./ordo/types.ts";
+import type { TextAlign, TextWeight } from "./ordo/types.ts";
 
-export { TEXT_SIZE_MAX, TEXT_SIZE_MIN, TEXT_WEIGHTS };
-export type { TextWeight };
+export { TEXT_ALIGNS, TEXT_SIZE_MAX, TEXT_SIZE_MIN, TEXT_WEIGHTS };
+export type { TextAlign, TextWeight };
 
 export type Font = { size: number; weight: number };
 
-// What a node or a line may say about its own text.
-export type TextStyle = { textSize?: number; textWeight?: TextWeight };
+// What a node or a line may say about its own text. Only a text node has
+// lines of its own to align, so only it reads textAlign.
+export type TextStyle = {
+  textSize?: number;
+  textWeight?: TextWeight;
+  textAlign?: TextAlign;
+};
 
 const WEIGHT_VALUE: Record<TextWeight, number> = {
   regular: 400,
@@ -72,13 +77,44 @@ export function withTextStyle<D extends TextStyle>(
   } as D;
 }
 
+// A text node's lines run from the left unless it says otherwise: it is where
+// a paragraph reads from, and for a single line it makes no difference at all.
+export const TEXT_ALIGN: TextAlign = "left";
+
+export const ALIGN_LABELS: Record<TextAlign, string> = {
+  left: "Align left",
+  center: "Align centre",
+  right: "Align right",
+};
+
+export const alignOf = (own?: TextStyle | null): TextAlign =>
+  own?.textAlign && (TEXT_ALIGNS as readonly string[]).includes(own.textAlign)
+    ? own.textAlign
+    : TEXT_ALIGN;
+
+/** `data` aligned to `align`; left, or undefined, leaves no trace in the file. */
+export function withTextAlign<D extends TextStyle>(
+  data: D,
+  align?: TextAlign,
+): D {
+  const { textAlign: _align, ...rest } = data;
+  return (
+    align !== undefined && align !== TEXT_ALIGN
+      ? { ...rest, textAlign: align }
+      : rest
+  ) as D;
+}
+
 // What the selection's text looks like, for a control to show: the size and
 // weight they share, or null where they differ, and whether any of them has a
-// size or weight of its own to reset.
+// size or weight of its own to reset. Alignment is summed over the items that
+// can be aligned only; `alignable` is how many there are.
 export type TextSummary = {
   count: number;
   size: number | null;
   weight: TextWeight | null;
+  alignable: number;
+  align: TextAlign | null;
   restyled: boolean;
 };
 
@@ -86,15 +122,21 @@ const shared = <T>(values: T[]): T | null =>
   values.length > 0 && values.every((v) => v === values[0]) ? values[0] : null;
 
 export function summarizeText(
-  items: { base: Font; own?: TextStyle | null }[],
+  items: { base: Font; own?: TextStyle | null; alignable?: boolean }[],
 ): TextSummary {
   const fonts = items.map(({ base, own }) => fontOf(base, own));
+  const aligned = items.filter((item) => item.alignable);
   return {
     count: items.length,
     size: shared(fonts.map((f) => f.size)),
     weight: shared(fonts.map((f) => weightName(f.weight))),
+    alignable: aligned.length,
+    align: shared(aligned.map(({ own }) => alignOf(own))),
     restyled: items.some(
-      ({ own }) => own?.textSize !== undefined || own?.textWeight !== undefined,
+      ({ own, alignable }) =>
+        own?.textSize !== undefined ||
+        own?.textWeight !== undefined ||
+        (alignable && own?.textAlign !== undefined),
     ),
   };
 }

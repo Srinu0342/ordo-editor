@@ -39,6 +39,7 @@ tube's `attach` must name an edge, or it is an `unknown-edge` error.
 | `parentId` | nesting in the skeleton |
 | `data.label` | `label`. Defaults to the id for box, group, text and class; a tube or fragment has none unless given one. |
 | `data.textSize`, `data.textWeight` | `textSize` (px, 8–72) and `textWeight` (`regular`, `semibold`, `bold`) on a box, group, text or class. Absent means the font its kind (or a box's shape) draws in; the text bar never stores a value equal to that. |
+| `data.textAlign` | `textAlign` on a text node: `left`, `center` or `right` [`left`]. A text node's `label` may run to several lines; the writer keeps them as a YAML block. |
 | `data.semanticType` | `type`, e.g. `store/postgres` |
 | `position` | layout `x`, `y`, rounded to integers |
 | `style.width/height`, or `width/height` after a resize | layout `w`, `h`: always for a group, never for text (a text node is as big as its text, so a `w`, `h` given one is not read), otherwise only when it differs from the size the kind (or a box's shape) is dropped at |

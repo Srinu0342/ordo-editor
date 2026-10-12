@@ -127,13 +127,26 @@ export default function LineStyle({
       {text !== null && (
         <>
           <div style={label}>Text</div>
-          <input
+          {/* A textarea, one row to each of the text's lines: an <input> would
+              strip the line breaks out of a label the moment it was edited. */}
+          <textarea
             id="ordo-line-text"
-            type="text"
+            rows={text.split("\n").length}
             value={text}
             placeholder="Text on the line"
             onChange={(e) => onTextChange?.(e.target.value)}
-            style={{ ...selectStyle, width: "100%", boxSizing: "border-box", padding: "0 8px", cursor: "text" }}
+            style={{
+              ...selectStyle,
+              width: "100%",
+              height: "auto",
+              minHeight: 28,
+              boxSizing: "border-box",
+              padding: "5px 8px",
+              lineHeight: 1.3,
+              resize: "none",
+              cursor: "text",
+              display: "block",
+            }}
           />
         </>
       )}
