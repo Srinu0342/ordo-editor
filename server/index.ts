@@ -3,6 +3,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
 import { createApi } from "./api.ts";
+import { readConfig } from "./config.ts";
+import type { Config } from "./config.ts";
 import { mcp } from "./mcp.ts";
 import { openWorkspace } from "./workspace.ts";
 
@@ -37,10 +39,20 @@ const ws = await openWorkspace().catch((e: unknown) => {
   process.exit(1);
 });
 
+// The switches in CONFIG, checked before anything listens too: a typo there
+// should stop the server, not leave a switch quietly at its default.
+let config: Config;
+try {
+  config = readConfig();
+} catch (e) {
+  console.error(`ordo: ${e instanceof Error ? e.message : String(e)}`);
+  process.exit(1);
+}
+
 const app = express();
 const server = http.createServer(app);
 
-app.use("/api", createApi(ws));
+app.use("/api", createApi(ws, config));
 app.use("/mcp", mcp);
 
 if (prod) {

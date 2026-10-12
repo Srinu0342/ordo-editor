@@ -55,6 +55,11 @@ const etagOf = (res: Response, body?: { etag?: string }) => res.headers.get("ETa
 
 export const getWorkspace = async (): Promise<{ label: string }> => json(await fetch("/api/workspace"));
 
+/** The switches CONFIG set in the server's .env (server/config.ts). */
+export type Config = { miniMap: boolean };
+
+export const getConfig = async (): Promise<Config> => json(await fetch("/api/config"));
+
 export const listFolders = async (path: string): Promise<FolderListing> =>
   json(await fetch(`/api/folders?${query({ path })}`));
 

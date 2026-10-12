@@ -184,7 +184,8 @@ else, set the workspace root in `.env` at the top of the clone:
 cp .env.sample .env      # then set ORDO_WORKSPACE=~/code in it
 ```
 
-`.env.sample` lists every setting (`ORDO_WORKSPACE`, `PORT`, `HOST`). The server
+`.env.sample` lists every setting (`ORDO_WORKSPACE`, `PORT`, `HOST`, and
+`CONFIG` for the editor's switches, such as `{"MINI_MAP": false}`). The server
 reads `.env` when it starts, so restart it after a change. A variable set in
 the shell wins over the file, so `ORDO_WORKSPACE=~/notes npm start` works for
 a one-off.
@@ -204,7 +205,9 @@ Each `-v` mounts a folder of repos under `/workspace`, the root inside the
 container. Keep the `127.0.0.1:` in `-p`: without it Docker publishes the port
 on every network interface, and anyone who can reach your machine could read
 and write the mounted repos. On Linux, add `--user "$(id -u):$(id -g)"` so the
-files Ordo writes belong to you.
+files Ordo writes belong to you. Pass other settings with `-e`, such as
+`-e CONFIG='{"MINI_MAP": false}'`; the image sets `HOST`, `PORT` and
+`ORDO_WORKSPACE` itself.
 
 </details>
 

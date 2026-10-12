@@ -14,6 +14,7 @@ import path from "node:path";
 import express from "express";
 
 import { createApi } from "../api.ts";
+import type { Config } from "../config.ts";
 import { DIAGRAM_FILE, EMPTY_DIAGRAM, ORDO_DIR } from "../diagrams.ts";
 import { openWorkspace } from "../workspace.ts";
 
@@ -24,12 +25,12 @@ const JSON_TYPE = { "Content-Type": "application/json" };
 type Served = { root: string; port: number; url: (p: string) => string };
 
 // A workspace in a fresh temp folder, served on a free loopback port.
-async function serve(t: TestContext): Promise<Served> {
+async function serve(t: TestContext, config?: Config): Promise<Served> {
   const given = await fs.mkdtemp(path.join(os.tmpdir(), "ordo-api-"));
   t.after(() => fs.rm(given, { recursive: true, force: true }));
   const ws = await openWorkspace({ ORDO_WORKSPACE: given });
   const app = express();
-  app.use("/api", createApi(ws));
+  app.use("/api", createApi(ws, config));
   const server = app.listen(0, "127.0.0.1");
   await once(server, "listening");
   t.after(() => {
@@ -93,6 +94,13 @@ test("health, workspace and the JSON 404", async (t) => {
   assert.deepEqual(await ws.json(), { label: path.basename(s.root) });
   const body = await fails(call(s.url("/nope")), 404);
   assert.match(String(body.error), /no route for GET \/api\/nope/);
+});
+
+test("config: the switches the server was given, the defaults otherwise", async (t) => {
+  const plain = await serve(t);
+  assert.deepEqual(await (await call(plain.url("/config"))).json(), { miniMap: true });
+  const off = await serve(t, { miniMap: false });
+  assert.deepEqual(await (await call(off.url("/config"))).json(), { miniMap: false });
 });
 
 test("folders: the root by default, a subfolder by path, flags on each", async (t) => {

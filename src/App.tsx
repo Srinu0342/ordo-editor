@@ -110,6 +110,7 @@ import { connectionEdge } from "./ordo/rf-mapping.ts";
 import { useLocalMode } from "./local/useLocalMode.ts";
 import type { LocalDeps, LocalState } from "./local/useLocalMode.ts";
 import { download } from "./local/download.ts";
+import { getConfig } from "./local/api.ts";
 import type { Attach, OrdoEdge, OrdoNode, Rect, XY } from "./types.ts";
 
 // Every id in play, nodes and edges together: the Ordo format keeps the two in
@@ -224,6 +225,17 @@ function Flow({
   const [yamlViewOpen, setYamlViewOpen] = useState(false);
   const importYamlRef = useRef<HTMLButtonElement>(null);
   const viewYamlRef = useRef<HTMLButtonElement>(null);
+
+  // CONFIG's MINI_MAP, asked once. Null until the server answers, so a
+  // minimap that is switched off never flashes up; no answer at all (no
+  // server, as under `vite preview`) shows it, its default.
+  const [miniMap, setMiniMap] = useState<boolean | null>(null);
+  useEffect(() => {
+    getConfig().then(
+      (c) => setMiniMap(c.miniMap !== false),
+      () => setMiniMap(true),
+    );
+  }, []);
 
   // The Ordo session, next to the canvas state: the documents of the last
   // Ordo import or export, which the next export patches. Any other way of
@@ -1374,7 +1386,7 @@ function Flow({
                 color={theme["canvas.grid"]}
                 bgColor={theme["canvas.bg"]}
               />
-              <MiniMap />
+              {miniMap && <MiniMap />}
               <Controls />
             </ReactFlow>
           </EditRequestContext.Provider>

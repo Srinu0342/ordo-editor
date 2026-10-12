@@ -4,6 +4,8 @@ import { HttpError, listFolders, parseRel, resolveInRoot } from "./workspace.ts"
 import type { Workspace } from "./workspace.ts";
 import { createDiagram, deleteDiagram, listDiagrams, readDiagramFile, renameDiagram, writeDiagramFile } from "./diagrams.ts";
 import type { Precondition } from "./diagrams.ts";
+import { DEFAULT_CONFIG } from "./config.ts";
+import type { Config } from "./config.ts";
 
 // Everything under /api. Mounted ahead of the frontend, so a route here wins
 // over a page of the same name.
@@ -71,7 +73,7 @@ const BODY_ERRORS: Record<string, string> = {
   "request.size.invalid": "The request body's size does not match its Content-Length.",
 };
 
-export function createApi(ws: Workspace): express.Router {
+export function createApi(ws: Workspace, config: Config = DEFAULT_CONFIG): express.Router {
   const api = express.Router();
 
   // First, so every answer carries it, refusals and errors included: the
@@ -94,6 +96,11 @@ export function createApi(ws: Workspace): express.Router {
 
   api.get("/workspace", (_req, res) => {
     res.json({ label: ws.label });
+  });
+
+  // The switches CONFIG set (server/config.ts), read once by the editor.
+  api.get("/config", (_req, res) => {
+    res.json(config);
   });
 
   api.get("/folders", async (req, res) => {

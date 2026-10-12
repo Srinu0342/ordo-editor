@@ -45,6 +45,7 @@ server/
 ├── api.ts               Local repo API: host and origin checks, routes
 ├── mcp.ts               MCP tools: validate_ordo, list_shapes
 ├── workspace.ts         Workspace root and path rules
+├── config.ts            CONFIG's switches, checked at start-up
 └── diagrams.ts          .ordo/<name>/ordo.yaml: reads, hash-checked atomic writes
 src/
 ├── App.tsx              Canvas: drag and drop, grouping, clipboard, shortcuts
