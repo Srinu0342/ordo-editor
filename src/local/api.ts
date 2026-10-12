@@ -4,7 +4,8 @@ import type { Diagnostic } from "../ordo/index.ts";
 // its repo: the server keeps no "current repo", so two browser tabs on two
 // repos never move each other. A response outside 2xx throws ApiError, except
 // where a status is an answer rather than a failure — a diagram that is not
-// there (404 on a read), and a write the file refused (412, 422).
+// there (404 on a read or a delete), and a write or delete the file refused
+// (412, 422).
 
 /** Each diagram is <repo>/.ordo/<tab>/ordo.yaml (server/diagrams.ts). */
 export const DIAGRAM_FILE = "ordo.yaml";
@@ -68,6 +69,25 @@ export async function createDiagram(repo: string, name: string): Promise<Diagram
   });
   const body = await json<DiagramFile>(res);
   return { text: body.text, etag: etagOf(res, body) };
+}
+
+/** Rename diagram `tab` to `name`. Its file moves with it unchanged, ETag included. */
+export async function renameDiagram(repo: string, tab: string, name: string): Promise<void> {
+  const res = await fetch(`/api/diagrams/${encodeURIComponent(tab)}/rename?${query({ repo })}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  await json(res);
+}
+
+/** Delete diagram `tab` if its file is still `etag`; "gone" if it already was, "changed" if it moved on since. */
+export async function deleteDiagram(repo: string, tab: string, etag: string): Promise<"deleted" | "gone" | "changed"> {
+  const res = await fetch(diagramUrl(repo, tab), { method: "DELETE", headers: { "If-Match": etag } });
+  if (res.status === 404) return "gone";
+  if (res.status === 412) return "changed";
+  if (!res.ok) throw new ApiError(res.status, await bodyOf(res));
+  return "deleted";
 }
 
 /** The diagram's text and ETag, or null when it is not there. */

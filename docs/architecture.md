@@ -8,8 +8,8 @@ see [ordo-rf-mapping.md](ordo-rf-mapping.md).
 
 [`server/index.ts`](../server/index.ts) serves everything on one port:
 
-- `/api` is the local repo API: list folders, read and write
-  `.ordo/<name>/ordo.yaml`.
+- `/api` is the local repo API: list folders, read, write and delete
+  `.ordo/<name>/ordo.yaml`, and rename a diagram's folder.
 - `/mcp` is an MCP endpoint over Streamable HTTP.
 - Every other path is the editor.
 

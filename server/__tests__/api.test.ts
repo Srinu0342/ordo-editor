@@ -331,6 +331,60 @@ test("PUT with If-None-Match: * recreates a diagram whose folder git removed", a
   assert.equal(await (await call(s.url(`/diagrams/auth${q("repo")}`))).text(), DIAGRAM);
 });
 
+test("rename: the diagram answers under its new name with the same ETag; bad names, missing tabs and wrong types are refused", async (t) => {
+  const s = await serve(t);
+  await mkRepo(s.root, "repo");
+  const repo = q("repo");
+  const rename = (tab: string, body: string, headers: Record<string, string> = JSON_TYPE) =>
+    call(s.url(`/diagrams/${encodeURIComponent(tab)}/rename${repo}`), { method: "POST", headers, body });
+  for (const name of ["auth", "billing"])
+    await call(s.url(`/diagrams${repo}`), { method: "POST", headers: JSON_TYPE, body: JSON.stringify({ name }) });
+  const before = (await call(s.url(`/diagrams/auth${repo}`))).headers.get("etag");
+
+  const res = await rename("auth", JSON.stringify({ name: "login flow" }));
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { name: "login flow" });
+  assert.deepEqual(await (await call(s.url(`/diagrams${repo}`))).json(), { diagrams: ["billing", "login flow"] });
+  assert.equal((await call(s.url(`/diagrams/login%20flow${repo}`))).headers.get("etag"), before);
+  await fails(call(s.url(`/diagrams/auth${repo}`)), 404);
+
+  const taken = await fails(rename("login flow", JSON.stringify({ name: "Billing" })), 409);
+  assert.equal(taken.error, 'There is already a diagram called "billing".');
+  await fails(rename("login flow", JSON.stringify({ name: "con" })), 400);
+  await fails(rename("login flow", JSON.stringify({ name: 7 })), 400);
+  await fails(rename("login flow", "{ not json"), 400);
+  await fails(rename("login flow", JSON.stringify({ name: "x" }), { "Content-Type": "text/plain" }), 415);
+  const gone = await fails(rename("auth", JSON.stringify({ name: "x" })), 404);
+  assert.equal(gone.error, 'There is no diagram called "auth" in this repo.');
+  await fails(rename("../..", JSON.stringify({ name: "x" })), 404);
+  assert.deepEqual((await fs.readdir(path.join(s.root, "repo", ORDO_DIR))).sort(), ["billing", "login flow"]);
+});
+
+test("DELETE: 428 without a real If-Match, 412 stale, 204 when it goes, 404 after", async (t) => {
+  const s = await serve(t);
+  await mkRepo(s.root, "repo");
+  const url = s.url(`/diagrams/auth${q("repo")}`);
+  const created = await call(s.url(`/diagrams${q("repo")}`), {
+    method: "POST",
+    headers: JSON_TYPE,
+    body: JSON.stringify({ name: "auth" }),
+  });
+  const { etag } = (await created.json()) as { etag: string };
+  const del = (headers: Record<string, string> = {}) => call(url, { method: "DELETE", headers });
+
+  await fails(del(), 428);
+  await fails(del({ "If-Match": "*" }), 428);
+  await fails(del({ "If-Match": '"stale"' }), 412);
+  assert.equal((await call(url)).status, 200, "still there");
+
+  const res = await del({ "If-Match": etag });
+  assert.equal(res.status, 204);
+  assert.deepEqual(await (await call(s.url(`/diagrams${q("repo")}`))).json(), { diagrams: [] });
+  await fails(del({ "If-Match": etag }), 404);
+  await fails(call(s.url(`/diagrams/..%2F..${q("repo")}`), { method: "DELETE", headers: { "If-Match": etag } }), 404);
+  assert.deepEqual(await fs.readdir(path.join(s.root, "repo", ORDO_DIR)), []);
+});
+
 test("a symlinked .ordo is 403 through the API", async (t) => {
   const s = await serve(t);
   await mkRepo(s.root, "repo");

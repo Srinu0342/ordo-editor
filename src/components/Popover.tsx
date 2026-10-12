@@ -1,10 +1,11 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent, ReactNode, RefObject } from "react";
 
-// A header button that drops a small panel under it: the Import menu and the
-// shortcuts card. It closes on Esc (focus goes back to the button), on a press
-// anywhere outside it, and when an item calls `close`. A menu puts focus on
-// its first item as it opens, so the arrows and Enter work at once.
+// A button that drops a small panel under it: the header's Import menu and
+// shortcuts card. Or raises one above it: the open tab's menu, in the footer.
+// It closes on Esc (focus goes back to the button), on a press anywhere
+// outside it, and when an item calls `close`. A menu puts focus on its first
+// item as it opens, so the arrows and Enter work at once.
 
 export default function Popover({
   label,
@@ -14,6 +15,7 @@ export default function Popover({
   buttonRef,
   role = "menu",
   align = "end",
+  side = "below",
   width = 240,
   children,
 }: {
@@ -25,10 +27,14 @@ export default function Popover({
   buttonRef?: RefObject<HTMLButtonElement | null>;
   role?: "menu" | "dialog";
   align?: "start" | "end"; // which edge of the button the panel lines up with
+  // Above, the panel is placed on the page where the button was when it
+  // opened, so a scrolling bar the button sits in can't clip it.
+  side?: "below" | "above";
   width?: number;
   children: (close: () => void) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const [anchor, setAnchor] = useState<DOMRect | null>(null);
   const ownRef = useRef<HTMLButtonElement>(null);
   const trigger = buttonRef ?? ownRef;
   const panelRef = useRef<HTMLDivElement>(null);
@@ -75,7 +81,10 @@ export default function Popover({
         aria-haspopup={role === "menu" ? "menu" : "dialog"}
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          setAnchor(trigger.current?.getBoundingClientRect() ?? null);
+          setOpen((o) => !o);
+        }}
         className={buttonClassName}
         style={{
           ...buttonStyle,
@@ -92,9 +101,17 @@ export default function Popover({
           aria-label={label}
           onKeyDown={onKeyDown}
           style={{
-            position: "absolute",
-            top: "calc(100% + 6px)",
-            ...(align === "end" ? { right: 0 } : { left: 0 }),
+            ...(side === "above"
+              ? {
+                  position: "fixed",
+                  bottom: window.innerHeight - (anchor?.top ?? 0) + 6,
+                  ...(align === "end" ? { right: window.innerWidth - (anchor?.right ?? 0) } : { left: anchor?.left ?? 0 }),
+                }
+              : {
+                  position: "absolute",
+                  top: "calc(100% + 6px)",
+                  ...(align === "end" ? { right: 0 } : { left: 0 }),
+                }),
             zIndex: 1000,
             width,
             padding: 6,
@@ -119,11 +136,13 @@ export function MenuItem({
   icon,
   title,
   hint,
+  danger = false,
   onSelect,
 }: {
   icon: ReactNode;
   title: string;
   hint: string;
+  danger?: boolean; // a row that deletes something: its icon and name in red
   onSelect: () => void;
 }) {
   return (
@@ -148,9 +167,9 @@ export function MenuItem({
         cursor: "pointer",
       }}
     >
-      <span style={{ display: "inline-flex", marginTop: 1, color: "var(--ui-muted)" }}>{icon}</span>
+      <span style={{ display: "inline-flex", marginTop: 1, color: danger ? "var(--ui-danger)" : "var(--ui-muted)" }}>{icon}</span>
       <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-        <span style={{ fontWeight: 500 }}>{title}</span>
+        <span style={{ fontWeight: 500, color: danger ? "var(--ui-danger)" : undefined }}>{title}</span>
         <span style={{ fontSize: 11.5, color: "var(--ui-muted)", lineHeight: 1.4 }}>{hint}</span>
       </span>
     </button>

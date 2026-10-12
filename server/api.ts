@@ -2,7 +2,7 @@ import express from "express";
 import type { ErrorRequestHandler, Request, RequestHandler } from "express";
 import { HttpError, listFolders, parseRel, resolveInRoot } from "./workspace.ts";
 import type { Workspace } from "./workspace.ts";
-import { createDiagram, listDiagrams, readDiagramFile, writeDiagramFile } from "./diagrams.ts";
+import { createDiagram, deleteDiagram, listDiagrams, readDiagramFile, renameDiagram, writeDiagramFile } from "./diagrams.ts";
 import type { Precondition } from "./diagrams.ts";
 
 // Everything under /api. Mounted ahead of the frontend, so a route here wins
@@ -113,6 +113,19 @@ export function createApi(ws: Workspace): express.Router {
     res.status(201).set("ETag", etag).json({ text, etag });
   });
 
+  api.post(
+    "/diagrams/:tab/rename",
+    requireType("application/json"),
+    express.json({ limit: "16kb" }),
+    async (req, res) => {
+      const dir = await repoDir(req);
+      const name: unknown = req.body?.name;
+      if (typeof name !== "string") throw new HttpError(400, 'Send the diagram\'s new name as { "name": "..." }.');
+      await renameDiagram(dir, tabOf(req), name);
+      res.json({ name });
+    },
+  );
+
   api.get("/diagrams/:tab", async (req, res) => {
     const { text, etag } = await readDiagramFile(await repoDir(req), tabOf(req));
     res.set("ETag", etag).type("application/yaml").send(text);
@@ -134,6 +147,15 @@ export function createApi(ws: Workspace): express.Router {
       res.set("ETag", etag).json({ etag });
     },
   );
+
+  // Only with the ETag the client last read: If-Match: * would delete a file
+  // nobody has seen, which is what the ETags exist to prevent.
+  api.delete("/diagrams/:tab", async (req, res) => {
+    const ifMatch = req.get("If-Match")?.trim();
+    if (!ifMatch || ifMatch === "*") throw new HttpError(428, "Send If-Match with the ETag you last read.");
+    await deleteDiagram(await repoDir(req), tabOf(req), ifMatch);
+    res.status(204).end();
+  });
 
   // Without this, an unknown /api path falls through to the frontend and comes
   // back as index.html with a 200, which a fetch would happily try to parse.

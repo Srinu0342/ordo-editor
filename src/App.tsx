@@ -1387,6 +1387,8 @@ function Flow({
         unsynced={local.unsynced}
         onSelect={(name) => void local.selectTab(name)}
         onCreate={local.createTab}
+        onRename={local.renameTab}
+        onDelete={(name) => void local.deleteTab(name)}
       />
     </div>
   );

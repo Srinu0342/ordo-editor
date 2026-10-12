@@ -1,5 +1,5 @@
 // The .ordo store: which folders count as diagrams and in what order, how a
-// new one is created, the compare-and-swap rules a write must pass (412 for a
+// new one is created and an existing one renamed or deleted, the compare-and-swap rules a write must pass (412 for a
 // stale or missing file, 422 for invalid YAML), CRLF kept, atomic replacement,
 // and that no symlink inside .ordo is ever followed.
 import { test } from "node:test";
@@ -15,9 +15,11 @@ import {
   EMPTY_DIAGRAM,
   ORDO_DIR,
   createDiagram,
+  deleteDiagram,
   etagOf,
   listDiagrams,
   readDiagramFile,
+  renameDiagram,
   writeDiagramFile,
 } from "../diagrams.ts";
 import { HttpError } from "../workspace.ts";
@@ -143,6 +145,105 @@ test("createDiagram: a file where .ordo or the tab folder should be is 409", asy
   await fs.mkdir(path.join(repo2, ORDO_DIR));
   await fs.writeFile(path.join(repo2, ORDO_DIR, "billing"), "");
   await refuses(createDiagram(repo2, "billing"), 409);
+});
+
+// --- renameDiagram ------------------------------------------------------------
+
+test("renameDiagram moves the folder; the file and its ETag come along unchanged", async (t) => {
+  const repo = await tempRepo(t);
+  await put(repo, "auth", DIAGRAM);
+  await fs.writeFile(path.join(repo, ORDO_DIR, "auth", "notes.md"), "kept");
+  const before = await readDiagramFile(repo, "auth");
+  await renameDiagram(repo, "auth", "login flow");
+  assert.deepEqual(await listDiagrams(repo), ["login flow"]);
+  assert.deepEqual(await readDiagramFile(repo, "login flow"), before);
+  assert.equal(await fs.readFile(path.join(repo, ORDO_DIR, "login flow", "notes.md"), "utf8"), "kept");
+  assert.equal(await exists(path.join(repo, ORDO_DIR, "auth")), false);
+});
+
+test("renameDiagram: a change of case alone is allowed, and the same name changes nothing", async (t) => {
+  const repo = await tempRepo(t);
+  await put(repo, "auth", DIAGRAM);
+  await renameDiagram(repo, "auth", "auth");
+  assert.deepEqual(await fs.readdir(path.join(repo, ORDO_DIR)), ["auth"]);
+  await renameDiagram(repo, "auth", "Auth");
+  assert.deepEqual(await fs.readdir(path.join(repo, ORDO_DIR)), ["Auth"]);
+  assert.equal(await readText(repo, "Auth"), DIAGRAM);
+});
+
+test("renameDiagram: a taken name in any case, or any folder already there, is 409 and nothing moves", async (t) => {
+  const repo = await tempRepo(t);
+  await put(repo, "auth", DIAGRAM);
+  await put(repo, "billing", OTHER);
+  await fs.mkdir(path.join(repo, ORDO_DIR, "notes")); // no ordo.yaml: not a diagram, still not free
+  await fs.mkdir(path.join(repo, ORDO_DIR, "Drafts"));
+  for (const name of ["billing", "BILLING", "notes", "drafts"]) await refuses(renameDiagram(repo, "auth", name), 409);
+  assert.equal(await readText(repo, "auth"), DIAGRAM);
+  assert.equal(await readText(repo, "billing"), OTHER);
+  assert.deepEqual(await fs.readdir(path.join(repo, ORDO_DIR, "notes")), []);
+});
+
+test("renameDiagram: an invalid new name is 400 and nothing moves", async (t) => {
+  const repo = await tempRepo(t);
+  await put(repo, "auth", DIAGRAM);
+  for (const name of ["", "con", "a/b", "../x", "x.", " x"]) await refuses(renameDiagram(repo, "auth", name), 400);
+  assert.deepEqual(await fs.readdir(path.join(repo, ORDO_DIR)), ["auth"]);
+});
+
+test("renameDiagram: no such diagram is 404, and tab is never joined into a path", async (t) => {
+  const repo = await tempRepo(t);
+  await refuses(renameDiagram(repo, "auth", "login"), 404); // no .ordo at all
+  await put(repo, "auth", DIAGRAM);
+  await fs.mkdir(path.join(repo, ORDO_DIR, "empty"));
+  await fs.writeFile(path.join(repo, DIAGRAM_FILE), DIAGRAM);
+  for (const tab of ["gone", "empty", "..", "../..", "auth/.."]) await refuses(renameDiagram(repo, tab, "login"), 404);
+  assert.deepEqual((await fs.readdir(path.join(repo, ORDO_DIR))).sort(), ["auth", "empty"]);
+  assert.equal(await exists(path.join(repo, "login")), false);
+});
+
+test("two renames of one diagram: exactly one lands, the other is 404", async (t) => {
+  const repo = await tempRepo(t);
+  await put(repo, "auth", DIAGRAM);
+  const results = await Promise.allSettled([renameDiagram(repo, "auth", "login"), renameDiagram(repo, "auth", "signin")]);
+  assert.deepEqual(results.map((r) => r.status).sort(), ["fulfilled", "rejected"]);
+  const lost = results.find((r) => r.status === "rejected") as PromiseRejectedResult;
+  assert.equal((lost.reason as HttpError).status, 404);
+  const [name] = await listDiagrams(repo);
+  assert.deepEqual(await listDiagrams(repo), [name]);
+  assert.equal(await readText(repo, name), DIAGRAM);
+});
+
+// --- deleteDiagram ------------------------------------------------------------
+
+test("deleteDiagram removes ordo.yaml and its emptied folder; .ordo and the other diagrams stay", async (t) => {
+  const repo = await tempRepo(t);
+  await put(repo, "auth", DIAGRAM);
+  await put(repo, "billing", OTHER);
+  await deleteDiagram(repo, "auth", sha(DIAGRAM));
+  assert.deepEqual(await listDiagrams(repo), ["billing"]);
+  assert.deepEqual(await fs.readdir(path.join(repo, ORDO_DIR)), ["billing"]);
+  assert.equal(await readText(repo, "billing"), OTHER);
+});
+
+test("deleteDiagram keeps anything else kept in the folder, and the folder with it", async (t) => {
+  const repo = await tempRepo(t);
+  await put(repo, "auth", DIAGRAM);
+  await fs.writeFile(path.join(repo, ORDO_DIR, "auth", "notes.md"), "kept");
+  await deleteDiagram(repo, "auth", sha(DIAGRAM));
+  assert.deepEqual(await listDiagrams(repo), []);
+  assert.deepEqual(await fs.readdir(path.join(repo, ORDO_DIR, "auth")), ["notes.md"]);
+});
+
+test("deleteDiagram: a stale ETag is 412 and the file stays; no such diagram is 404", async (t) => {
+  const repo = await tempRepo(t);
+  await refuses(deleteDiagram(repo, "auth", sha(DIAGRAM)), 404); // no .ordo at all
+  await put(repo, "auth", DIAGRAM);
+  await refuses(deleteDiagram(repo, "auth", sha(OTHER)), 412);
+  assert.equal(await readText(repo, "auth"), DIAGRAM);
+  await fs.writeFile(path.join(repo, DIAGRAM_FILE), DIAGRAM);
+  for (const tab of ["gone", "..", "../..", "auth/.."]) await refuses(deleteDiagram(repo, tab, sha(DIAGRAM)), 404);
+  assert.equal(await fs.readFile(path.join(repo, DIAGRAM_FILE), "utf8"), DIAGRAM);
+  assert.deepEqual(await listDiagrams(repo), ["auth"]);
 });
 
 // --- readDiagramFile ----------------------------------------------------------
@@ -340,11 +441,13 @@ test("a symlinked .ordo is 403 for every operation", async (t) => {
   await refuses(createDiagram(repo, "billing"), 403);
   await refuses(writeDiagramFile(repo, "auth", OTHER, { ifMatch: sha(DIAGRAM) }), 403);
   await refuses(writeDiagramFile(repo, "billing", OTHER, { ifNoneMatch: "*" }), 403);
+  await refuses(renameDiagram(repo, "auth", "login"), 403);
+  await refuses(deleteDiagram(repo, "auth", sha(DIAGRAM)), 403);
   assert.deepEqual(await fs.readdir(path.join(elsewhere, ORDO_DIR)), ["auth"]);
   assert.equal(await readText(elsewhere, "auth"), DIAGRAM);
 });
 
-test("a symlinked tab folder is 403 for read, write, recreate and create", async (t) => {
+test("a symlinked tab folder is 403 for read, write, recreate, create, rename and delete", async (t) => {
   const repo = await tempRepo(t);
   const elsewhere = await tempRepo(t);
   await fs.writeFile(path.join(elsewhere, DIAGRAM_FILE), DIAGRAM);
@@ -356,6 +459,8 @@ test("a symlinked tab folder is 403 for read, write, recreate and create", async
   await refuses(writeDiagramFile(repo, "auth", OTHER, { ifNoneMatch: "*" }), 403);
   await refuses(writeDiagramFile(repo, "billing", OTHER, { ifNoneMatch: "*" }), 403);
   await refuses(createDiagram(repo, "billing"), 403);
+  await refuses(renameDiagram(repo, "auth", "login"), 403);
+  await refuses(deleteDiagram(repo, "auth", sha(DIAGRAM)), 403);
   assert.equal(await fs.readFile(path.join(elsewhere, DIAGRAM_FILE), "utf8"), DIAGRAM);
   assert.equal(await exists(path.join(repo, "nowhere")), false);
 });
@@ -370,6 +475,8 @@ test("a symlinked ordo.yaml is 403 to read or write, and not overwritten by a re
   await refuses(writeDiagramFile(repo, "auth", OTHER, { ifMatch: sha(DIAGRAM) }), 403);
   await refuses(writeDiagramFile(repo, "auth", OTHER, { ifNoneMatch: "*" }), 412);
   await refuses(createDiagram(repo, "auth"), 409);
+  await refuses(renameDiagram(repo, "auth", "login"), 403);
+  await refuses(deleteDiagram(repo, "auth", sha(DIAGRAM)), 403);
   assert.equal(await fs.readFile(target, "utf8"), DIAGRAM);
   assert.equal((await fs.lstat(fileOf(repo, "auth"))).isSymbolicLink(), true);
 });

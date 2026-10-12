@@ -80,6 +80,7 @@ const SHORTCUTS: [keys: string, what: string][] = [
   [`${MOD} ⇧ Z`, `Redo (last ${HISTORY_LIMIT} changes)`],
   ["Delete", "Delete the selection"],
   [`${MOD} S`, "Sync with the file"],
+  ["Double-click the tab", "Rename the diagram"],
 ];
 
 export default function Header({

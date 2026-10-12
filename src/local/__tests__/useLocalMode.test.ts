@@ -57,6 +57,8 @@ function fakeServer(t: TestContext, files: Record<string, string>) {
   const set = (tab: string, text: string) => store.set(tab, { text, etag: `"v${++version}"` });
   for (const [tab, text] of Object.entries(files)) set(tab, text);
   const puts: Put[] = [];
+  const renames: { from: string; name: string }[] = [];
+  const deletes: { tab: string; ifMatch: string | null }[] = [];
   let beforePut: ((tab: string) => void) | null = null;
 
   const had = globalThis.fetch;
@@ -74,6 +76,17 @@ function fakeServer(t: TestContext, files: Record<string, string>) {
       set(name, EMPTY);
       return Response.json(store.get(name), { status: 201, headers: { ETag: store.get(name)!.etag } });
     }
+    const renamed = /^\/api\/diagrams\/(.+)\/rename$/.exec(u.pathname);
+    if (renamed && method === "POST") {
+      const from = decodeURIComponent(renamed[1]);
+      const { name } = JSON.parse(String(init.body));
+      renames.push({ from, name });
+      if (!store.has(from)) return Response.json({ error: `There is no diagram called "${from}" in this repo.` }, { status: 404 });
+      if (store.has(name)) return Response.json({ error: `There is already a diagram called "${name}".` }, { status: 409 });
+      store.set(name, store.get(from)!);
+      store.delete(from);
+      return Response.json({ name });
+    }
     const tab = decodeURIComponent(u.pathname.slice("/api/diagrams/".length));
     if (method === "GET") {
       const file = store.get(tab);
@@ -90,6 +103,14 @@ function fakeServer(t: TestContext, files: Record<string, string>) {
       set(tab, String(init.body));
       return Response.json({ etag: store.get(tab)!.etag }, { headers: { ETag: store.get(tab)!.etag } });
     }
+    if (method === "DELETE") {
+      deletes.push({ tab, ifMatch: headers["If-Match"] ?? null });
+      const file = store.get(tab);
+      if (!file) return Response.json({ error: "no such diagram" }, { status: 404 });
+      if (file.etag !== headers["If-Match"]) return Response.json({ error: "The file changed." }, { status: 412 });
+      store.delete(tab);
+      return new Response(null, { status: 204 });
+    }
     throw new Error(`unexpected ${method} ${url}`);
   }) as typeof fetch;
   t.after(() => {
@@ -102,6 +123,8 @@ function fakeServer(t: TestContext, files: Record<string, string>) {
     edit: (tab: string, text: string) => set(tab, text), // an agent, or git, changing the file
     remove: (tab: string) => store.delete(tab),
     puts,
+    renames,
+    deletes,
     onNextPut: (fn: (tab: string) => void) => {
       beforePut = fn;
     },
@@ -256,6 +279,103 @@ test("a repo with no diagrams is empty, and the first + creates one", async (t) 
   assert.equal(server.text("billing"), EMPTY);
   assert.equal(window.location.search, `?source=local&repo=${REPO}&tab=billing`);
   assert.equal(await run(() => view.local.createTab("billing")), 'There is already a diagram called "billing".');
+});
+
+test("renaming the open tab keeps the canvas, its edits and its base; Sync then writes under the new name", async (t) => {
+  const server = fakeServer(t, { checkout: CHECKOUT, auth: EMPTY });
+  const view = mount(t, `/?source=local&repo=${REPO}&tab=checkout`);
+  await ready(view);
+  const etag = server.etag("checkout");
+  const steps = window.history.length;
+  drag(view, "api");
+  const nodes = view.nodes;
+
+  assert.equal(await run(() => view.local.renameTab("checkout", "basket")), null);
+  assert.deepEqual(server.renames, [{ from: "checkout", name: "basket" }]);
+  assert.deepEqual(stateOf(view).tabs, ["auth", "basket"]);
+  assert.equal(stateOf(view).tab, "basket");
+  assert.equal(stateOf(view).status, "ready");
+  assert.equal(view.session.name, "basket");
+  assert.equal(window.location.search, `?source=local&repo=${REPO}&tab=basket`);
+  assert.equal(window.history.length, steps, "the address is replaced, not pushed");
+  assert.equal(view.nodes, nodes, "the canvas is untouched");
+  assert.equal(view.local.unsyncedNow(), true);
+  assert.deepEqual(server.puts, []);
+
+  assert.equal(await run(() => view.local.sync()), true);
+  assert.deepEqual(server.puts, [{ tab: "basket", ifMatch: etag, ifNoneMatch: null }]);
+});
+
+test("a rename the server refuses says why and changes nothing", async (t) => {
+  fakeServer(t, { checkout: CHECKOUT, auth: EMPTY });
+  const view = mount(t, `/?source=local&repo=${REPO}&tab=checkout`);
+  await ready(view);
+  assert.equal(await run(() => view.local.renameTab("checkout", "auth")), 'There is already a diagram called "auth".');
+  assert.equal(await run(() => view.local.renameTab("gone", "x")), 'There is no diagram called "gone" in this repo.');
+  assert.deepEqual(stateOf(view).tabs, ["auth", "checkout"]);
+  assert.equal(stateOf(view).tab, "checkout");
+  assert.equal(view.session.name, "checkout");
+});
+
+test("Delete asks first: Cancel keeps it; Delete removes the file and opens the first tab left", async (t) => {
+  const server = fakeServer(t, { auth: EMPTY, billing: EMPTY, checkout: CHECKOUT });
+  const view = mount(t, `/?source=local&repo=${REPO}&tab=checkout`);
+  await ready(view);
+  const etag = server.etag("checkout");
+
+  await answering(view, () => view.local.deleteTab("checkout"), "delete", "cancel");
+  assert.deepEqual(server.deletes, []);
+  assert.equal(stateOf(view).tab, "checkout");
+
+  await answering(view, () => view.local.deleteTab("checkout"), "delete", "delete");
+  assert.deepEqual(server.deletes, [{ tab: "checkout", ifMatch: etag }]);
+  assert.equal(server.text("checkout"), undefined);
+  await ready(view);
+  assert.deepEqual(stateOf(view).tabs, ["auth", "billing"]);
+  assert.equal(stateOf(view).tab, "auth");
+  assert.equal(window.location.search, `?source=local&repo=${REPO}&tab=auth`);
+  assert.ok(view.notes.includes("Deleted checkout."));
+});
+
+test("deleting a diagram with unsynced edits says they go too", async (t) => {
+  fakeServer(t, { auth: EMPTY, checkout: CHECKOUT });
+  const view = mount(t, `/?source=local&repo=${REPO}&tab=checkout`);
+  await ready(view);
+  drag(view, "api");
+  let done!: Promise<void>;
+  await act(async () => {
+    done = view.local.deleteTab("checkout");
+  });
+  await until("the delete question", () => view.local.question?.kind === "delete");
+  assert.match(view.local.question!.notice ?? "", /edits that aren't in the file yet/);
+  await act(async () => view.local.answer("cancel"));
+  await act(async () => {
+    await done;
+  });
+  assert.equal(view.local.unsyncedNow(), true, "Cancel keeps them");
+});
+
+test("a diagram changed on disk since it was loaded isn't deleted", async (t) => {
+  const server = fakeServer(t, { auth: EMPTY, checkout: CHECKOUT });
+  const view = mount(t, `/?source=local&repo=${REPO}&tab=checkout`);
+  await ready(view);
+  const changed = CHECKOUT.replace("label: Payments API", "label: Checkout API");
+  server.edit("checkout", changed);
+  await answering(view, () => view.local.deleteTab("checkout"), "delete", "delete");
+  assert.equal(server.text("checkout"), changed);
+  assert.equal(stateOf(view).tab, "checkout");
+  assert.ok(view.notes.some((n) => /changed on disk since it was loaded, so it wasn't deleted/.test(n)));
+});
+
+test("deleting the last diagram leaves the empty repo", async (t) => {
+  fakeServer(t, { checkout: CHECKOUT });
+  const view = mount(t, `/?source=local&repo=${REPO}&tab=checkout`);
+  await ready(view);
+  await answering(view, () => view.local.deleteTab("checkout"), "delete", "delete");
+  assert.equal(stateOf(view).status, "empty");
+  assert.deepEqual(stateOf(view).tabs, []);
+  assert.equal(view.nodes.length, 0);
+  assert.equal(window.location.search, `?source=local&repo=${REPO}`);
 });
 
 // --- sync ---------------------------------------------------------------------

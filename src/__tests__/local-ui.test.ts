@@ -1,5 +1,6 @@
 // Local mode's pieces of UI, driven the way a person drives them: the
-// projects page's folder browser, the tab bar's `+` checking a name, and the
+// projects page's folder browser, the tab bar's `+` and rename checking a name,
+// its ⋯ menu, and the
 // sync dialog offering exactly its choices.
 import { test } from "node:test";
 import type { TestContext } from "node:test";
@@ -168,14 +169,41 @@ test("a folder that has gone since last time falls back to the root; a 404 elsew
 // ---------------------------------------------------------------------------
 // The tab bar
 
-function tabBar(t: TestContext, tabs: string[], onCreate: (name: string) => Promise<string | null> = async () => null) {
+function tabBar(
+  t: TestContext,
+  tabs: string[],
+  onCreate: (name: string) => Promise<string | null> = async () => null,
+  onRename: (from: string, name: string) => Promise<string | null> = async () => null,
+) {
   const selected: string[] = [];
+  const deleted: string[] = [];
   const host = mount(
     t,
-    createElement(TabBar, { tabs, active: tabs[0] ?? null, unsynced: true, onSelect: (n: string) => selected.push(n), onCreate }),
+    createElement(TabBar, {
+      tabs,
+      active: tabs[0] ?? null,
+      unsynced: true,
+      onSelect: (n: string) => selected.push(n),
+      onCreate,
+      onRename,
+      onDelete: (n: string) => deleted.push(n),
+    }),
   );
-  return { host, selected };
+  return { host, selected, deleted };
 }
+
+const menuButton = (host: HTMLElement) => host.querySelector<HTMLButtonElement>('button[aria-label="Diagram actions"]');
+const menuItem = (host: HTMLElement, title: string) =>
+  [...host.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((b) => b.textContent?.startsWith(title));
+/** Rename the open tab from its ⋯ menu. */
+const startRename = (host: HTMLElement) => {
+  click(menuButton(host)!);
+  click(menuItem(host, "Rename"));
+};
+
+const renameField = (host: HTMLElement) => host.querySelector<HTMLInputElement>('input[aria-label="Diagram name"]');
+const press = (input: HTMLInputElement, key: string) =>
+  act(() => input.dispatchEvent(new window.KeyboardEvent("keydown", { key, bubbles: true })));
 
 test("tabs are listed as given, the open one marked unsynced, and a click selects another", (t) => {
   const { host, selected } = tabBar(t, ["auth", "checkout"]);
@@ -240,6 +268,85 @@ test("Esc drops the name field", (t) => {
   assert.ok(button(host, "+"));
 });
 
+test("only the open tab has a ⋯ menu: Rename and Delete; Delete hands the tab on and closes the menu", (t) => {
+  const { host, deleted } = tabBar(t, ["auth", "checkout"]);
+  assert.equal(host.querySelectorAll('button[aria-label="Diagram actions"]').length, 1);
+  assert.equal(host.querySelector('[role="menu"]'), null);
+  click(menuButton(host)!);
+  const items = [...host.querySelectorAll('[role="menu"] [role="menuitem"]')];
+  assert.deepEqual(
+    items.map((b) => b.querySelector("span > span")?.textContent),
+    ["Rename", "Delete"],
+  );
+  assert.equal(document.activeElement, items[0], "the first item has focus");
+  click(menuItem(host, "Delete"));
+  assert.deepEqual(deleted, ["auth"]);
+  assert.equal(host.querySelector('[role="menu"]'), null);
+  assert.equal(renameField(host), null);
+});
+
+test("Rename in the menu and a double-click on the open tab both open the field on its name", (t) => {
+  const { host } = tabBar(t, ["auth", "checkout"]);
+  startRename(host);
+  assert.equal(host.querySelector('[role="menu"]'), null);
+  const input = renameField(host)!;
+  assert.equal(input.value, "auth");
+  assert.equal(document.activeElement, input);
+  assert.equal(button(host, "Rename")!.disabled, true, "unchanged");
+  assert.deepEqual(
+    [...host.querySelectorAll('[role="tab"]')].map((b) => b.textContent),
+    ["checkout"],
+    "the field stands in for its tab",
+  );
+
+  press(input, "Escape");
+  assert.equal(renameField(host), null);
+  const [open, other] = [...host.querySelectorAll('[role="tab"]')];
+  act(() => other.dispatchEvent(new window.MouseEvent("dblclick", { bubbles: true })));
+  assert.equal(renameField(host), null, "a tab that isn't open doesn't rename");
+  act(() => open.dispatchEvent(new window.MouseEvent("dblclick", { bubbles: true })));
+  assert.equal(renameField(host)!.value, "auth");
+});
+
+test("rename checks the new name against the other tabs only, so a change of case is allowed", (t) => {
+  const { host } = tabBar(t, ["auth", "checkout"]);
+  startRename(host);
+  const input = renameField(host)!;
+  type(input, "Checkout");
+  assert.match(host.querySelector('[role="alert"]')?.textContent ?? "", /already a diagram called "checkout"/);
+  assert.equal(button(host, "Rename")!.disabled, true);
+  type(input, "Auth");
+  assert.equal(host.querySelector('[role="alert"]'), null);
+  assert.equal(button(host, "Rename")!.disabled, false);
+});
+
+test("rename submits on Enter, closes on success, shows the server's reason, and Enter unchanged just closes", async (t) => {
+  const replies: (string | null)[] = ['There is no diagram called "auth" in this repo.', null];
+  const renamed: [string, string][] = [];
+  const { host } = tabBar(t, ["auth", "checkout"], undefined, async (from, name) => (renamed.push([from, name]), replies.shift()!));
+  const open = () => startRename(host);
+
+  open();
+  press(renameField(host)!, "Enter");
+  assert.equal(renameField(host), null);
+  assert.deepEqual(renamed, [], "nothing to rename");
+
+  open();
+  type(renameField(host)!, "login");
+  press(renameField(host)!, "Enter");
+  await flush();
+  assert.match(host.querySelector('[role="alert"]')?.textContent ?? "", /no diagram called "auth"/);
+  assert.ok(renameField(host), "the field stays open");
+
+  press(renameField(host)!, "Enter");
+  await flush();
+  assert.deepEqual(renamed, [
+    ["auth", "login"],
+    ["auth", "login"],
+  ]);
+  assert.equal(renameField(host), null, "closed once it is renamed");
+});
+
 // ---------------------------------------------------------------------------
 // The sync dialog
 
@@ -251,6 +358,7 @@ const EXPECTED: Record<SyncQuestionKind, string[]> = {
   blocked: ["OK"],
   "blocked-take": ["Take the file's", "Cancel"],
   "leave-tab": ["Sync and switch", "Discard and switch", "Cancel"],
+  delete: ["Delete", "Cancel"],
 };
 
 test("each sync question offers exactly its choices, and each button answers with its own", (t) => {

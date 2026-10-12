@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import type { TestContext } from "node:test";
 import assert from "node:assert/strict";
-import { ApiError, createDiagram, listDiagrams, readDiagramFile, writeDiagramFile } from "../api.ts";
+import { ApiError, createDiagram, deleteDiagram, listDiagrams, readDiagramFile, renameDiagram, writeDiagramFile } from "../api.ts";
 
 type Call = { url: string; init?: RequestInit };
 
@@ -68,4 +68,27 @@ test("create posts the name as JSON and throws the server's reason on 409", asyn
   assert.deepEqual(await createDiagram("r", "auth"), { text: "ordo: 1\n", etag: '"e"' });
   assert.equal(calls[0].init!.body, JSON.stringify({ name: "auth" }));
   await assert.rejects(createDiagram("r", "Auth"), /already exists/);
+});
+
+test("rename posts the new name as JSON to the old tab's path, and throws the server's reason", async (t) => {
+  const replies = [json(200, { name: "login flow" }), json(409, { error: 'There is already a diagram called "billing".' })];
+  const calls = stubFetch(t, () => replies.shift()!);
+  await renameDiagram("code/payments api", "auth flow", "login flow");
+  assert.equal(calls[0].url, "/api/diagrams/auth%20flow/rename?repo=code%2Fpayments+api");
+  assert.equal(calls[0].init!.method, "POST");
+  assert.equal((calls[0].init!.headers as Record<string, string>)["Content-Type"], "application/json");
+  assert.equal(calls[0].init!.body, JSON.stringify({ name: "login flow" }));
+  await assert.rejects(renameDiagram("r", "auth", "billing"), (e: unknown) => e instanceof ApiError && e.status === 409);
+});
+
+test("delete sends the ETag it was given; 404 and 412 come back as answers, other failures throw", async (t) => {
+  const replies = [new Response(null, { status: 204 }), json(404, { error: "gone" }), json(412, { error: "changed" }), json(403, { error: "No." })];
+  const calls = stubFetch(t, () => replies.shift()!);
+  assert.equal(await deleteDiagram("code/payments api", "auth flow", '"a"'), "deleted");
+  assert.equal(calls[0].url, "/api/diagrams/auth%20flow?repo=code%2Fpayments+api");
+  assert.equal(calls[0].init!.method, "DELETE");
+  assert.equal((calls[0].init!.headers as Record<string, string>)["If-Match"], '"a"');
+  assert.equal(await deleteDiagram("r", "t", '"a"'), "gone");
+  assert.equal(await deleteDiagram("r", "t", '"a"'), "changed");
+  await assert.rejects(deleteDiagram("r", "t", '"a"'), (e: unknown) => e instanceof ApiError && e.status === 403 && e.message === "No.");
 });

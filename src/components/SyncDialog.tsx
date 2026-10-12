@@ -6,8 +6,9 @@ import { DIAGRAM_FILE } from "../local/api.ts";
 
 // Every question local mode asks, in one dialog: what Sync found when both
 // sides changed, a file that is gone or does not read, a canvas that cannot
-// be written, and leaving a diagram with work on it that is saved nowhere. Each kind offers exactly its choices; the safe one
-// is focused, so Enter never overwrites anything.
+// be written, leaving a diagram with work on it that is saved nowhere, and
+// deleting one. Each kind offers exactly its choices; the safe one is focused,
+// so Enter never overwrites or deletes anything.
 
 export type SyncQuestionKind =
   | "conflict"
@@ -16,16 +17,28 @@ export type SyncQuestionKind =
   | "invalid"
   | "blocked"
   | "blocked-take"
-  | "leave-tab";
+  | "leave-tab"
+  | "delete";
 
-export type SyncChoice = "keep" | "take" | "download" | "recreate" | "close-tab" | "sync" | "discard" | "ok" | "cancel";
+export type SyncChoice =
+  | "keep"
+  | "take"
+  | "download"
+  | "recreate"
+  | "close-tab"
+  | "sync"
+  | "discard"
+  | "delete"
+  | "ok"
+  | "cancel";
 
-type Option = { choice: SyncChoice; label: string; title?: string; primary?: true };
+type Option = { choice: SyncChoice; label: string; title?: string; primary?: true; danger?: true };
 
 /**
  * Each kind's buttons, left to right. The last is the safe one: it takes focus
  * and Esc picks it. A primary button marks the way on that loses nothing; a
- * choice that overwrites one side or the other is never primary.
+ * choice that overwrites one side or the other is never primary, and one
+ * that deletes is marked as a danger.
  */
 export const SYNC_CHOICES: Record<SyncQuestionKind, Option[]> = {
   conflict: [
@@ -53,6 +66,10 @@ export const SYNC_CHOICES: Record<SyncQuestionKind, Option[]> = {
   "leave-tab": [
     { choice: "sync", label: "Sync and switch", primary: true },
     { choice: "discard", label: "Discard and switch" },
+    { choice: "cancel", label: "Cancel" },
+  ],
+  delete: [
+    { choice: "delete", label: "Delete", title: "Remove its file from disk", danger: true },
     { choice: "cancel", label: "Cancel" },
   ],
 };
@@ -96,6 +113,11 @@ function wording({ kind, tab = "this diagram" }: SyncQuestion): { title: string;
       };
     case "leave-tab":
       return { title: "Unsynced changes", text: `${tab} has edits that aren't in its file yet.` };
+    case "delete":
+      return {
+        title: `Delete ${tab}?`,
+        text: `${file(tab)} is removed from disk. Ordo never runs git: whatever you committed stays in its history.`,
+      };
   }
 }
 
@@ -127,14 +149,14 @@ export default function SyncDialog({
       footer={
         <>
           <span style={hintStyle}>Esc to {safe === "ok" ? "close" : "cancel"}</span>
-          {options.map(({ choice, label, title: hint, primary }) => (
+          {options.map(({ choice, label, title: hint, primary, danger }) => (
             <button
               key={choice}
               type="button"
               title={hint}
               ref={choice === safe ? safeRef : undefined}
               onClick={() => onChoice(choice)}
-              style={primary ? primaryButton(false) : secondaryButton}
+              style={primary ? primaryButton(false) : danger ? { ...secondaryButton, color: "var(--ui-danger)" } : secondaryButton}
             >
               {label}
             </button>

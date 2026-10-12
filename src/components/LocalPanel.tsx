@@ -47,7 +47,7 @@ export function LocalCard({
           written until you create it.
         </p>
         <div style={{ display: "flex", justifyContent: "center", marginTop: 18 }}>
-          <NameField existing={tabs} onCreate={onCreate ?? noCreate} onCancel={() => {}} size="large" />
+          <NameField existing={tabs} onSubmit={onCreate ?? noCreate} onCancel={() => {}} size="large" />
         </div>
         <button type="button" onClick={onLeave} style={{ ...linkButton, marginTop: 18 }}>
           Choose another folder

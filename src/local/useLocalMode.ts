@@ -666,6 +666,62 @@ export function useLocalMode(deps: LocalDeps) {
         return null;
       }, "Wait for the current sync to finish.");
 
+    /**
+     * Null once diagram `from` is called `name`, or the sentence saying why
+     * not. Only the folder moves, so the canvas, its unsynced edits and the
+     * base all stay: the next Sync writes them under the new name.
+     */
+    const renameTab = (from: string, name: string): Promise<string | null> =>
+      run<string | null>(async () => {
+        const s = local();
+        if (!s) return "Open a repo first.";
+        if (name === from) return null;
+        try {
+          await api.renameDiagram(s.repo, from, name);
+        } catch (e) {
+          // The server's own sentence: a 404 here is the diagram, not the repo.
+          return e instanceof ApiError ? e.message : explain(e);
+        }
+        const now = local() ?? s;
+        const open = now.tab === from;
+        setState({ ...now, tabs: sortTabs(now.tabs.map((t) => (t === from ? name : t))), tab: open ? name : now.tab });
+        if (open) {
+          navigate({ source: "local", repo: now.repo, tab: name }, "replace");
+          depsRef.current.setSession({ ...depsRef.current.session, name });
+        }
+        return null;
+      }, "Wait for the current sync to finish.");
+
+    /**
+     * Delete the open diagram, once asked, and move to the first tab left.
+     * Only the file as it was last loaded or written goes: one that changed on
+     * disk since is kept, for Sync to show first.
+     */
+    const deleteTab = (tab: string) =>
+      run(async () => {
+        const s = local();
+        if (!s || s.tab !== tab || !baseRef.current) return;
+        const choice = await ask({
+          kind: "delete",
+          tab,
+          notice: unsyncedNow() ? "The canvas has edits that aren't in the file yet. They go too." : undefined,
+        });
+        if (choice !== "delete") return;
+        const d = depsRef.current;
+        let result: Awaited<ReturnType<typeof api.deleteDiagram>>;
+        try {
+          result = await api.deleteDiagram(s.repo, tab, baseRef.current.etag);
+        } catch (e) {
+          d.notify(`Couldn't delete ${tab}: ${explain(e)}`, "error");
+          return;
+        }
+        if (result === "changed") {
+          d.notify(`${tab} changed on disk since it was loaded, so it wasn't deleted. Sync to see the change first.`, "error");
+          return;
+        }
+        await closeTab(local() ?? s, tab, result === "gone" ? `${tab} was already gone from disk.` : `Deleted ${tab}.`);
+      }, undefined);
+
     const sync = () => run(syncNow, false);
 
     /** Back to the projects page. */
@@ -734,6 +790,8 @@ export function useLocalMode(deps: LocalDeps) {
       openRepo,
       selectTab,
       createTab,
+      renameTab,
+      deleteTab,
       sync,
       autoSync,
       closeRepo,
@@ -811,6 +869,8 @@ export function useLocalMode(deps: LocalDeps) {
     openRepo: fns.openRepo,
     selectTab: fns.selectTab,
     createTab: fns.createTab,
+    renameTab: fns.renameTab,
+    deleteTab: fns.deleteTab,
     sync: fns.sync,
     closeRepo: fns.closeRepo,
     isLocal: fns.isLocal,

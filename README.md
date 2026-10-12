@@ -242,6 +242,12 @@ http://localhost:5173/?source=local&repo=code/payments-api&tab=checkout
 - Each diagram is one file, `<repo>/.ordo/<name>/ordo.yaml`, and shows as a tab
   at the bottom of the canvas. `+` creates a new one; `.ordo/` is created with
   the first diagram, so opening a repo writes nothing.
+- The `⋯` on the open tab renames or deletes the diagram; a double-click on the
+  tab renames it too. A rename moves its folder and leaves the file inside
+  untouched, so unsynced edits stay on the canvas and the next Sync writes them
+  under the new name. Delete asks first, then removes `ordo.yaml` (and the
+  folder, if nothing else is in it). A file that changed on disk since it was
+  loaded is never deleted: Sync first to see the change.
 - **Sync** (or `⌘S`) is two-way, and also runs on its own every 10 seconds. If
   only the canvas changed it writes the file; if only the file changed (an
   agent, `git pull`) it loads it. If both changed it asks: keep yours, take the
@@ -288,17 +294,18 @@ selected group, placed to the right of whatever is already on the canvas.
 Use `⌘` on macOS and `Ctrl` elsewhere. In the app, the keyboard button in the
 header shows this list.
 
-| Shortcut             | Action |
-| -------------------- | ------ |
-| Shift-drag           | Lasso select |
-| `⌘`-click            | Add to the selection |
-| `⌘A`                 | Select all |
-| `⌘C` / `⌘X` / `⌘V`   | Copy / cut / paste at the pointer |
-| `⌘D`                 | Duplicate |
-| `⌘Z` / `⇧⌘Z`         | Undo / redo |
-| `⌘S`                 | Sync |
-| Delete / Backspace   | Delete the selection |
-| Double-click a label | Edit it |
+| Shortcut                  | Action |
+| ------------------------- | ------ |
+| Shift-drag                | Lasso select |
+| `⌘`-click                 | Add to the selection |
+| `⌘A`                      | Select all |
+| `⌘C` / `⌘X` / `⌘V`        | Copy / cut / paste at the pointer |
+| `⌘D`                      | Duplicate |
+| `⌘Z` / `⇧⌘Z`              | Undo / redo |
+| `⌘S`                      | Sync |
+| Delete / Backspace        | Delete the selection |
+| Double-click a label      | Edit it |
+| Double-click the open tab | Rename the diagram |
 
 In the import dialog, `⌘Enter` imports and `Esc` closes.
 
@@ -311,7 +318,7 @@ In the import dialog, `⌘Enter` imports and `Esc` closes.
 - [x] Diagrams as files in your repo, with two-way Sync
 - [x] Sync that runs by itself, so agents and `git pull` show up live
 - [x] An MCP endpoint for agents
-- [ ] Rename and delete diagrams from Ordo (today you do that with git or by hand)
+- [x] Rename and delete diagrams from Ordo
 - [ ] Hosted mode, with GitHub as the repo
 - [ ] More Mermaid importers: class, state, ER and C4
 

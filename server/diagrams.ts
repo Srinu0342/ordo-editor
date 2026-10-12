@@ -145,9 +145,10 @@ export async function readDiagramFile(repoDir: string, tab: string): Promise<{ t
 // with another write to the same file from this process. Keyed lower-case:
 // on macOS and Windows "Auth" and "auth" are one folder.
 const locks = new Map<string, Promise<unknown>>();
+const lockKey = (repoDir: string, tab: string) => path.join(repoDir, ORDO_DIR, tab).toLowerCase();
 
 async function withLock<T>(repoDir: string, tab: string, run: () => Promise<T>): Promise<T> {
-  const key = path.join(repoDir, ORDO_DIR, tab).toLowerCase();
+  const key = lockKey(repoDir, tab);
   const turn = (locks.get(key) ?? Promise.resolve()).then(run);
   const tail = turn.catch(() => {});
   locks.set(key, tail);
@@ -187,6 +188,61 @@ export async function createDiagram(repoDir: string, name: string): Promise<{ te
       throw e;
     }
     return { text: EMPTY_DIAGRAM, etag: etagOf(EMPTY_DIAGRAM) };
+  });
+}
+
+// Both names' chains, so no write to either lands mid-rename. Taken in one
+// order, so two renames that swap names can't each hold one and wait on the
+// other; once when the names differ only in case, as they share a chain.
+function withBothLocks<T>(repoDir: string, a: string, b: string, run: () => Promise<T>): Promise<T> {
+  const [ka, kb] = [lockKey(repoDir, a), lockKey(repoDir, b)];
+  if (ka === kb) return withLock(repoDir, a, run);
+  const [first, second] = ka < kb ? [a, b] : [b, a];
+  return withLock(repoDir, first, () => withLock(repoDir, second, run));
+}
+
+/**
+ * Rename `.ordo/<tab>` to `.ordo/<name>`: the folder moves, ordo.yaml and its
+ * ETag stay as they are. `name` passes the same rules as a new diagram's,
+ * against every other diagram, so a change of case alone is allowed. 404 when
+ * there is no such diagram, 400 or 409 for a name that can't be used.
+ */
+export async function renameDiagram(repoDir: string, tab: string, name: string): Promise<void> {
+  const others = (await listDiagrams(repoDir)).filter((d) => d !== tab);
+  const problem = checkDiagramName(name, others);
+  if (problem) throw new HttpError(problem.reason === "taken" ? 409 : 400, problem.message);
+
+  return withBothLocks(repoDir, tab, name, async () => {
+    const found = await findDiagram(repoDir, tab);
+    if (!found) throw new HttpError(404, `There is no diagram called "${tab}" in this repo.`);
+    if (name === tab) return;
+    // Anything else at the new name, in any case, is refused, a folder with no
+    // ordo.yaml in it included: rename would quietly replace an empty folder,
+    // and on macOS and Windows a case variant is the same folder.
+    const ordo = path.dirname(found.dir);
+    const lower = name.toLowerCase();
+    const clash = (await entriesOf(ordo)).find((d) => d.name !== tab && d.name.toLowerCase() === lower);
+    if (clash) throw new HttpError(409, `.ordo already has a folder called "${clash.name}".`);
+    await fs.rename(found.dir, path.join(ordo, name));
+  });
+}
+
+/**
+ * Delete diagram `tab` if its file still has ETag `ifMatch`, so a file that
+ * changed since it was read is never removed unseen. ordo.yaml goes, then its
+ * folder if that leaves it empty: anything else kept there stays. 404 when
+ * there is no such diagram, 412 when it changed.
+ */
+export async function deleteDiagram(repoDir: string, tab: string, ifMatch: string): Promise<void> {
+  return withLock(repoDir, tab, async () => {
+    const found = await findDiagram(repoDir, tab);
+    const current = found && (await readNoFollow(found.file, found.rel));
+    if (!found || !current) throw new HttpError(404, `There is no diagram called "${tab}" in this repo.`);
+    if (etagOf(current) !== ifMatch) throw new HttpError(412, `The diagram "${tab}" changed on disk since it was last read.`);
+    await fs.unlink(found.file);
+    await fs.rmdir(found.dir).catch((e) => {
+      if (code(e) !== "ENOTEMPTY" && code(e) !== "EEXIST" && !missing(e)) throw e;
+    });
   });
 }
 
