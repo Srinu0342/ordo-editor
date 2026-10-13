@@ -58,7 +58,7 @@ src/
 ├── mermaid/             Type detection, flowchart and sequence importers
 ├── components/          Header, palette, dialogs, repo picker, tab bar
 ├── ordo/                The Ordo file format: read, validate, write
-├── local/               Local repo mode: URL, API client, sync decision
+├── local/               Local repo mode: URL, API client, sync decision, saved views
 ├── history.ts           Undo/redo as diffs (pure)
 └── useHistory.ts        Decides where each undo step starts and ends
 docs/

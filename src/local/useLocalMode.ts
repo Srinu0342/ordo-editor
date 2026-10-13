@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { Viewport } from "@xyflow/react";
 import { emptySession, exportOrdo, fileName, importOrdo, readDiagram } from "../ordo/index.ts";
 import type { Diagnostic, OrdoExport, OrdoSession } from "../ordo/index.ts";
 import type { OrdoEdge, OrdoNode } from "../types.ts";
@@ -9,6 +10,7 @@ import { isTyping } from "../useHistory.ts";
 import { FREE, placeUrl, readPlace, samePlace } from "./location.ts";
 import type { Place } from "./location.ts";
 import { rememberRepo } from "./recent.ts";
+import { forgetView, moveView, rememberView, savedView } from "./views.ts";
 import { canvasState, decideSync } from "./sync.ts";
 import type { FileState, SyncAction } from "./sync.ts";
 import type { SyncChoice, SyncQuestion } from "../components/SyncDialog.tsx";
@@ -65,7 +67,8 @@ export type LocalDeps = {
   edges: OrdoEdge[];
   nodesInitialized: boolean; // React Flow's: every visible node measured
   autoSyncMs?: number; // AUTO_SYNC_MS unless a test wants it sooner
-  replaceCanvas: (nodes: OrdoNode[], edges: OrdoEdge[]) => void;
+  // `view` is where the diagram was last left (views.ts); without one it is fitted.
+  replaceCanvas: (nodes: OrdoNode[], edges: OrdoEdge[], view?: Viewport | null) => void;
   session: OrdoSession;
   setSession: (session: OrdoSession) => void;
   startNewHistory: () => void; // undo starts over: the canvas is another diagram now
@@ -264,7 +267,7 @@ export function useLocalMode(deps: LocalDeps) {
         setState({ ...s, tab, status: "invalid", diagnostics: imported.diagnostics, error: undefined });
         return false;
       }
-      d.replaceCanvas(imported.nodes, imported.edges);
+      d.replaceCanvas(imported.nodes, imported.edges, savedView(s.repo, tab));
       d.setSession({ name: tab, ordo: imported.ordo, layout: imported.layout, style: imported.style });
       if (newHistory) d.startNewHistory();
       setState({ ...s, tab, status: "ready", diagnostics: undefined, error: undefined });
@@ -341,6 +344,7 @@ export function useLocalMode(deps: LocalDeps) {
     /** Drop `tab` from the bar, after its file went away, and move to the first one left. */
     const closeTab = async (s: Local, tab: string, notice: string) => {
       depsRef.current.notify(notice, "info");
+      forgetView(s.repo, tab);
       const tabs = s.tabs.filter((t) => t !== tab);
       if (!tabs.length) return showEmpty(s.repo);
       navigate({ source: "local", repo: s.repo, tab: tabs[0] }, "replace");
@@ -682,6 +686,7 @@ export function useLocalMode(deps: LocalDeps) {
           // The server's own sentence: a 404 here is the diagram, not the repo.
           return e instanceof ApiError ? e.message : explain(e);
         }
+        moveView(s.repo, from, name);
         const now = local() ?? s;
         const open = now.tab === from;
         setState({ ...now, tabs: sortTabs(now.tabs.map((t) => (t === from ? name : t))), tab: open ? name : now.tab });
@@ -723,6 +728,15 @@ export function useLocalMode(deps: LocalDeps) {
       }, undefined);
 
     const sync = () => run(syncNow, false);
+
+    /**
+     * Remember where the open diagram is being looked at. Only once it is the
+     * one on the canvas: while another tab loads, the view is still the last one's.
+     */
+    const keepView = (view: Viewport) => {
+      const s = local();
+      if (s?.status === "ready" && s.tab) rememberView(s.repo, s.tab, view);
+    };
 
     /** Back to the projects page. */
     const closeRepo = () =>
@@ -793,6 +807,7 @@ export function useLocalMode(deps: LocalDeps) {
       renameTab,
       deleteTab,
       sync,
+      keepView,
       autoSync,
       closeRepo,
       answer,
@@ -872,6 +887,7 @@ export function useLocalMode(deps: LocalDeps) {
     renameTab: fns.renameTab,
     deleteTab: fns.deleteTab,
     sync: fns.sync,
+    keepView: fns.keepView,
     closeRepo: fns.closeRepo,
     isLocal: fns.isLocal,
     unsyncedNow: fns.unsyncedNow,

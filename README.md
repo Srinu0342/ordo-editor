@@ -245,6 +245,8 @@ http://localhost:5173/?source=local&repo=code/payments-api&tab=checkout
 - Each diagram is one file, `<repo>/.ordo/<name>/ordo.yaml`, and shows as a tab
   at the bottom of the canvas. `+` creates a new one; `.ordo/` is created with
   the first diagram, so opening a repo writes nothing.
+- Each tab opens where you left it: its zoom and position are kept in this
+  browser. A tab you haven't opened here before is fitted to its diagram.
 - The `⋯` on the open tab renames or deletes the diagram; a double-click on the
   tab renames it too. A rename moves its folder and leaves the file inside
   untouched, so unsynced edits stay on the canvas and the next Sync writes them

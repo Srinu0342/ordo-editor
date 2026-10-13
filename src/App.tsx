@@ -19,8 +19,10 @@ import type {
   NodeChange,
   NodePositionChange,
   OnConnect,
+  OnMove,
   OnNodeDrag,
   OnNodesChange,
+  Viewport,
   XYPosition,
 } from "@xyflow/react";
 import { ToastContainer, toast } from "react-toastify";
@@ -250,7 +252,7 @@ function Flow({
     [editRequest],
   );
 
-  const { screenToFlowPosition, toObject, getInternalNode, fitView, getZoom } =
+  const { screenToFlowPosition, toObject, getInternalNode, fitView, getZoom, setViewport } =
     useReactFlow<OrdoNode, OrdoEdge>();
 
   // Window-level shortcuts read the graph through refs: binding the listener to
@@ -270,23 +272,25 @@ function Flow({
   // measured. A fit fires on the first measurement it sees and frames only the
   // nodes measured by then — and a tube re-measuring its own handles gets in
   // first, so an early fit frames one lifeline and leaves the rest off-screen.
+  // A tab opened again goes back to the view it was left on instead.
   const nodesInitialized = useNodesInitialized();
-  const fitPending = useRef<string | null>(null);
+  const fitPending = useRef<string | Viewport | null>(null);
   useEffect(() => {
-    const id = fitPending.current;
-    if (!id || !nodesInitialized) return;
+    const pending = fitPending.current;
+    if (!pending || !nodesInitialized) return;
     fitPending.current = null;
-    fitView(id === FIT_ALL ? { padding: 0.2 } : { nodes: [{ id }], padding: 0.2 });
-  }, [nodesInitialized, fitView]);
+    if (typeof pending === "object") setViewport(pending);
+    else fitView(pending === FIT_ALL ? { padding: 0.2 } : { nodes: [{ id: pending }], padding: 0.2 });
+  }, [nodesInitialized, fitView, setViewport]);
 
   // Local mode puts a whole diagram on the canvas at once: a file loaded into
   // a tab. An empty one has nothing to frame, and a fit left pending would
   // jump the view on the first node drawn.
   const replaceCanvas = useCallback(
-    (nds: OrdoNode[], eds: OrdoEdge[]) => {
+    (nds: OrdoNode[], eds: OrdoEdge[], view?: Viewport | null) => {
       setNodes(nds);
       setEdges(eds);
-      fitPending.current = nds.length ? FIT_ALL : null;
+      fitPending.current = nds.length ? (view ?? FIT_ALL) : null;
     },
     [setNodes, setEdges],
   );
@@ -308,6 +312,10 @@ function Flow({
     notify,
   });
   const page = pageOf(local.state);
+
+  // Every pan and zoom, by hand or by a button, is where the open tab was left.
+  const { keepView } = local;
+  const onMoveEnd = useCallback<OnMove>((_, view) => keepView(view), [keepView]);
 
   // The canvas's shortcuts only act while the canvas is there to see.
   const editingRef = useRef(false);
@@ -1348,6 +1356,7 @@ function Flow({
               onConnect={onConnect}
               onNodeDrag={onNodeDrag}
               onNodeDragStop={onNodeDragStop}
+              onMoveEnd={onMoveEnd}
               connectionMode={ConnectionMode.Loose}
               // A sequence diagram is tall out of all proportion to a flowchart.
               // React Flow's default floor of 0.5 stops fitView ever fitting one,
