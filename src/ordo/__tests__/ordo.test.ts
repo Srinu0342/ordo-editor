@@ -20,7 +20,7 @@ import { connectionEdge, rfEdge, rfNode } from "../rf-mapping.ts";
 import { resolve } from "../read.ts";
 import { parseAllDocuments } from "yaml";
 import { TUBE_TYPE } from "../../nodes/tube.ts";
-import { makeNode, sizeOfNode, textSize } from "../../nodes/defaults.ts";
+import { classHeight, makeNode, sizeOfNode, textSize } from "../../nodes/defaults.ts";
 import { SHAPE_KEYS } from "../../shapes/registry.ts";
 import { DEFAULT_EDGE_STYLE, newEdge } from "../../edgeStyle.ts";
 import type { OrdoLayoutFile, ResolvedDiagram } from "../types.ts";
@@ -313,6 +313,26 @@ test("import with no layout places every node, and the export after it leaves th
   assert.deepEqual(Object.keys(layout.nodes!), ["client", "vpc", "gateway", "services", "api", "db", "queue"]);
   for (const id of ["vpc", "services"]) assert.ok(layout.nodes![id].w && layout.nodes![id].h, id);
   for (const id of ["client", "gateway", "api", "db", "queue"]) assert.equal(layout.nodes![id].w, undefined, id);
+});
+
+test("with no layout, a class takes the room its rows need, so the node below it is clear of it", () => {
+  const rows = (n: number) => `[${Array.from({ length: n }, (_, i) => `"field${i}: int"`).join(", ")}]`;
+  const text = [
+    "ordo: 1",
+    "nodes: [big, small]",
+    "edges: [{ id: e1, from: big, to: small }]",
+    "data:",
+    "  nodes:",
+    `    big: { kind: class, sections: [${rows(6)}, ${rows(4)}] }`,
+    "    small: { kind: class }",
+    "",
+  ].join("\n");
+  const { nodes } = importOrdo(text);
+  const at = (id: string) => nodes.find((n) => n.id === id)!.position.y;
+  // ten rows of about 22px under a 28px name band, against the 118px a class is dropped at
+  assert.ok(at("small") - at("big") >= classHeight([Array(6).fill(""), Array(4).fill("")]), `${at("small") - at("big")}`);
+  assert.ok(classHeight([Array(6).fill(""), Array(4).fill("")]) > 250);
+  assert.ok(classHeight([["field: type"], ["method()"]]) <= 118); // the palette's class fits its own size
 });
 
 test("an empty canvas exports as an empty diagram", () => {

@@ -3,7 +3,7 @@ import { SHAPES as REGISTRY, defaultSize } from "../shapes/registry.ts";
 import { SHAPE_ALIASES } from "../shapes/aliases.ts";
 import { LINE_TYPES, applyEdgeStyle, newEdge } from "../edgeStyle.ts";
 import type { EdgeStyle } from "../edgeStyle.ts";
-import { NODE_TYPE_DEFAULTS, TEXT_FONT, textSize } from "../nodes/defaults.ts";
+import { CLASS_FONT, NODE_TYPE_DEFAULTS, TEXT_FONT, classHeight, textSize } from "../nodes/defaults.ts";
 import { fontOf } from "../textStyle.ts";
 import { TUBE_TYPE } from "../nodes/tube.ts";
 import { FRAGMENT_TYPE } from "../nodes/fragment.ts";
@@ -148,12 +148,19 @@ export function kindSize(kind: OrdoKind, shape: string): { w: number; h: number 
 
 /**
  * The room a node takes before React Flow has drawn it, for spacing: the size
- * its kind draws at, except a text node's, which is its text's.
+ * its kind draws at, except a text node's, which is its text's, and a class's,
+ * which is as tall as its rows.
  */
 export function roomFor(
-  n: Pick<ResolvedNode, "kind" | "isGroup" | "shape" | "label" | "textSize" | "textWeight">,
+  n: Pick<ResolvedNode, "kind" | "isGroup" | "shape" | "label" | "textSize" | "textWeight" | "sections">,
 ): { w: number; h: number } {
   const kind = kindOf(n);
+  if (kind === "class") {
+    const { w, h } = kindSize(kind, n.shape);
+    // the rows CompartmentNode shows when a class has none of its own
+    const sections = n.sections ?? NODE_TYPE_DEFAULTS.compartment.data.sections ?? [];
+    return { w, h: Math.max(h, classHeight(sections, fontOf(CLASS_FONT, n))) };
+  }
   if (kind !== "text") return kindSize(kind, n.shape);
   const [w, h] = textSize(n.label ?? "", fontOf(TEXT_FONT, n));
   return { w, h };

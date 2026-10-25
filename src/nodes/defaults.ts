@@ -53,6 +53,17 @@ export const textSize = (text: string, font: Font = TEXT_FONT): Size => {
 export const CLASS_FONT = { size: 15, weight: 700 };
 export const GROUP_FONT = { size: 14, weight: 600 };
 
+// A class is as tall as its rows: CompartmentNode lets its content set its
+// height. This is that height before it has been drawn, from the paddings and
+// borders the component draws with, at the browser's normal line height.
+const NORMAL_LINE = 1.15;
+export function classHeight(sections: readonly (readonly string[])[], font: Font = CLASS_FONT): number {
+  const size = font.size ?? CLASS_FONT.size;
+  const row = 6 + (size - 1) * NORMAL_LINE; // 3px above and below each row's text
+  const body = sections.reduce((h, rows) => h + 6 + Math.max(22, rows.length * row), 0);
+  return Math.ceil(10 + size * NORMAL_LINE + body + 1.5 * (sections.length + 1));
+}
+
 // The font a shape's label slot is drawn in, or null for a shape with no slot
 // (a junction, a fork bar). Read from the registry at the shape's own size.
 const slotFont = (shape: string): Font | null => {
