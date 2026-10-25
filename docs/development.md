@@ -37,13 +37,24 @@ built-in test runner. The Mermaid tests run the real Mermaid parser under
 jsdom, so an importer is tested against what Mermaid itself makes of the
 source.
 
+## The agent guide
+
+The MCP tool `ordo_guide` serves the Markdown pages in
+[`docs/agents/`](agents/): `core.md`, and one page per topic. The prose is
+written by hand. The lists are not: a page writes `{{list:shapes}}`,
+`{{list:markers}}` and so on, and [`server/guide.ts`](../server/guide.ts) fills
+them in from the shape registry and the format's vocabularies when the page is
+served. Pages are read on every call, so an edit shows up without a restart.
+Every YAML example in a page must be a valid diagram; `npm test` checks them.
+
 ## Project layout
 
 ```
 server/
 ├── index.ts             One process: the editor, /api and /mcp
 ├── api.ts               Local repo API: host and origin checks, routes
-├── mcp.ts               MCP tools: validate_ordo, list_shapes
+├── mcp.ts               MCP tools: ordo_guide, validate_ordo
+├── guide.ts             The agent guide: docs/agents/ with its lists filled in
 ├── workspace.ts         Workspace root and path rules
 ├── config.ts            CONFIG's switches, checked at start-up
 └── diagrams.ts          .ordo/<name>/ordo.yaml: reads, hash-checked atomic writes
@@ -64,6 +75,7 @@ src/
 docs/
 ├── architecture.md      How it works
 ├── ordo-rf-mapping.md   The file format, field by field
+├── agents/              The guide ordo_guide serves: a core page, one page per topic
 └── assets/              Logo and README screenshots
 examples/
 └── checkout.yml         A sample diagram: every node kind, several edge styles
@@ -74,8 +86,8 @@ public/
 ## Your first change: add a shape
 
 Every box shape is one row in [`src/shapes/registry.ts`](../src/shapes/registry.ts).
-Add a row and the palette, its search, the file format and the MCP
-`list_shapes` tool all pick it up. [architecture.md](architecture.md#structure-is-a-type-outline-is-a-value)
+Add a row and the palette, its search, the file format and the shape list in
+the MCP guide all pick it up. [architecture.md](architecture.md#structure-is-a-type-outline-is-a-value)
 explains why.
 
 ## Before you open a PR

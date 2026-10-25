@@ -245,20 +245,29 @@ test("a tube is a node like any other: it exports and reads back", () => {
 // ---------------------------------------------------------------------------
 // 5. Validator
 
+const BROKEN_DIAGNOSTICS = [
+  ["6:9", "duplicate-id", 'id "api" is used more than once (first on line 3)'],
+  ["8:30", "unknown-endpoint", 'edge "e1" to "cache" is not a node'],
+  [
+    "12:7",
+    "group-shape",
+    'group "vpc" cannot have a shape: it is drawn as a frame round its children. For a shape, list "vpc" in nodes as a plain id',
+  ],
+  ["13:5", "orphan-data", 'data for "ghost", which is not in nodes'],
+  ["16:14", "unknown-shape", 'unknown shape "blob"'],
+];
+
 test("the broken file yields exactly its five diagnostics", () => {
   const got = readDiagram(BROKEN).diagnostics.map((d) => [`${d.line}:${d.col}`, d.code, d.message]);
-  assert.deepEqual(got, [
-    ["6:9", "duplicate-id", 'id "api" is used more than once'],
-    ["8:30", "unknown-endpoint", 'edge "e1" to "cache" is not a node'],
-    ["12:7", "group-shape", 'group "vpc" cannot have a shape'],
-    ["13:5", "orphan-data", 'data for "ghost", which is not in nodes'],
-    ["16:14", "unknown-shape", 'unknown shape "blob"'],
-  ]);
+  assert.deepEqual(got, BROKEN_DIAGNOSTICS);
 });
 
-test("an unknown key stops at the schema pass", () => {
+test("an unknown key is reported in the same pass as every other error", () => {
   const got = readDiagram(`${BROKEN}      colour: red\n`).diagnostics.map((d) => [`${d.line}:${d.col}`, d.code, d.message]);
-  assert.deepEqual(got, [["17:7", "schema", 'data.nodes.db.colour: unknown key "colour"']]);
+  assert.deepEqual(got, [
+    ...BROKEN_DIAGNOSTICS,
+    ["17:7", "schema", 'data.nodes.db.colour: unknown key "colour"; a box takes kind, label, shape, type, textSize and textWeight'],
+  ]);
 });
 
 test("an unclosed flow map stops at the YAML pass", () => {
@@ -274,7 +283,7 @@ test("a duplicate map key stops at the YAML pass", () => {
   const read = readDiagram("ordo: 1\nnodes:\n  - a\ndata:\n  nodes:\n    a:\n      label: A\n      label: B\n");
   assert.deepEqual(
     read.diagnostics.map((d) => [d.code, d.line, d.col, d.message]),
-    [["yaml-syntax", 8, 7, "Map keys must be unique"]],
+    [["yaml-syntax", 8, 7, "Map keys must be unique; the same key appears twice in one map"]],
   );
 });
 
@@ -482,10 +491,10 @@ test("a second line typed into a one-line entry opens it up into a block", () =>
 test("alignment is checked: a known side, and only on a text node", () => {
   const codes = (text: string) => readDiagram(text).diagnostics.map((d) => [d.code, d.message]);
   assert.deepEqual(codes(LINES.replace("textAlign: center", "textAlign: justify")), [
-    ["schema", "data.nodes.note.textAlign: must be equal to one of the allowed values"],
+    ["schema", 'data.nodes.note.textAlign: must be one of left, center, right, not "justify"'],
   ]);
   assert.deepEqual(codes("ordo: 1\nnodes: [b]\ndata:\n  nodes:\n    b: { textAlign: center }\n"), [
-    ["kind-field", 'box "b" has no field "textAlign"'],
+    ["kind-field", 'box "b" has no field "textAlign"; a box takes kind, label, shape, type, textSize and textWeight'],
   ]);
 });
 
@@ -534,12 +543,12 @@ test("text size and weight reach the canvas and are written back as they were", 
 test("text style is checked: a known weight, a size in range, on a kind that shows text", () => {
   const codes = (text: string) => readDiagram(text).diagnostics.map((d) => [d.code, d.message]);
   assert.deepEqual(codes(STYLED.replace("textWeight: bold", "textWeight: heavy")), [
-    ["schema", "data.nodes.api.textWeight: must be equal to one of the allowed values"],
+    ["schema", 'data.nodes.api.textWeight: must be one of regular, semibold, bold, not "heavy"'],
   ]);
   assert.equal(codes(STYLED.replace("textSize: 20", "textSize: 200"))[0][0], "schema");
   assert.deepEqual(
     codes("ordo: 1\nnodes: [t]\ndata:\n  nodes:\n    t: { kind: tube, textSize: 14 }\n"),
-    [["kind-field", 'tube "t" has no field "textSize"']],
+    [["kind-field", 'tube "t" has no field "textSize"; a tube takes kind, label, type, slots, taps, variant, attach and align']],
   );
 });
 

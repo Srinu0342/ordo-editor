@@ -226,12 +226,24 @@ export type DiagnosticCode =
   | "group-shape"
   | "kind-field"
   | "unknown-shape"
+  | "guard-count"
+  | "tap-order"
   | "layout-orphan"
+  | "unknown-handle"
   | "canvas-unsupported"
   | "canvas-bad-id"
   | "canvas-lossy"
   | "canvas-bad-parent"
   | "canvas-dangling-edge";
+
+/**
+ * The pages of the agent guide (docs/agents/, served by the MCP's
+ * ordo_guide): the core page, which ordo_guide returns when no topic is given,
+ * and one page per topic.
+ */
+export const GUIDE_TOPICS = ["sequence", "class", "editing", "mermaid"] as const;
+export type GuideTopic = (typeof GUIDE_TOPICS)[number];
+export type GuidePage = "core" | GuideTopic;
 
 export interface Diagnostic {
   severity: "error" | "warning";
@@ -241,6 +253,7 @@ export interface Diagnostic {
   path?: (string | number)[];
   line?: number; // 1-based
   col?: number; // 1-based
+  guide?: GuidePage; // the agent guide's page that explains the rule; the MCP names it, the editor does not
 }
 
 export const DEFAULTS = {

@@ -38,16 +38,26 @@ const PARSE_OPTIONS = { version: "1.2", uniqueKeys: true, prettyErrors: true } a
 // and then the source excerpt; both are already carried as line and col.
 const POSITION = / at line \d+, column \d+:?$/;
 
+// What usually causes the YAML errors a hand-written diagram runs into.
+const SYNTAX_HINTS: Partial<Record<string, string>> = {
+  BLOCK_AS_IMPLICIT_KEY: 'quote a value that holds ": ", like label: "id: uuid"',
+  TAB_AS_INDENT: "indent with spaces",
+  DUPLICATE_KEY: "the same key appears twice in one map",
+};
+
 /** A document's YAML errors and warnings, as diagnostics. */
 function syntax(doc: Document, file: "ordo" | "layout"): Diagnostic[] {
-  return [...doc.errors, ...doc.warnings].map((e) => ({
-    severity: doc.errors.includes(e) ? "error" : "warning",
-    code: "yaml-syntax",
-    message: e.message.split("\n")[0].replace(POSITION, ""),
-    file,
-    line: e.linePos?.[0].line,
-    col: e.linePos?.[0].col,
-  }));
+  return [...doc.errors, ...doc.warnings].map((e) => {
+    const hint = SYNTAX_HINTS[e.code];
+    return {
+      severity: doc.errors.includes(e) ? "error" : "warning",
+      code: "yaml-syntax",
+      message: `${e.message.split("\n")[0].replace(POSITION, "")}${hint ? `; ${hint}` : ""}`,
+      file,
+      line: e.linePos?.[0].line,
+      col: e.linePos?.[0].col,
+    };
+  });
 }
 
 const hasErrors = (d: Diagnostic[]) => d.some((x) => x.severity === "error");
@@ -66,12 +76,22 @@ function readOrdoDoc(doc: Document, lc: LineCounter, shapes: ReadonlySet<string>
   return { doc, value: hasErrors(diagnostics) ? null : (value as OrdoFile), diagnostics };
 }
 
-function readLayoutDoc(doc: Document, lc: LineCounter, ordo: OrdoFile | null): ReadResult<OrdoLayoutFile> {
+function readLayoutDoc(doc: Document, lc: LineCounter, structure: unknown): ReadResult<OrdoLayoutFile> {
   const diagnostics = syntax(doc, "layout");
   if (hasErrors(diagnostics)) return { doc, value: null, diagnostics };
   const value = doc.toJS();
-  diagnostics.push(...validateLayout(value, doc, lc, ordo));
+  diagnostics.push(...validateLayout(value, doc, lc, structure));
   return { doc, value: hasErrors(diagnostics) ? null : (value as OrdoLayoutFile), diagnostics };
+}
+
+/**
+ * What the structure document holds, for checking a layout against its ids:
+ * its value whenever its YAML parsed, errors or not, so a layout is still
+ * checked beside a structure that has a mistake. null when there is none.
+ */
+export function structureOf(read: ReadResult<OrdoFile> | null): unknown {
+  if (!read) return null;
+  return read.value ?? (read.diagnostics.some((d) => d.code === "yaml-syntax" && d.severity === "error") ? null : read.doc.toJS());
 }
 
 /** Read the structure first: the layout validator needs its node and edge ids to flag orphans. */
@@ -80,9 +100,10 @@ export function readOrdo(text: string, shapes: ReadonlySet<string>): ReadResult<
   return readOrdoDoc(doc, lc, shapes);
 }
 
-export function readLayout(text: string, ordo: OrdoFile | null): ReadResult<OrdoLayoutFile> {
+/** `structure` is the structure document's value (see structureOf), or null to skip the orphan check. */
+export function readLayout(text: string, structure: unknown): ReadResult<OrdoLayoutFile> {
   const { doc, lc } = parse(text);
-  return readLayoutDoc(doc, lc, ordo);
+  return readLayoutDoc(doc, lc, structure);
 }
 
 /** Which of the two documents `doc` is, by its version key. */
@@ -151,7 +172,7 @@ export function readBundle(text: string, shapes: ReadonlySet<string>): BundleRea
     diagnostics.push(problem(null, "ordo", "no structure document: the file needs the part that starts ordo: 1"));
 
   const ordo = ordoDoc ? readOrdoDoc(ordoDoc, lc, shapes) : null;
-  const layout = layoutDoc ? readLayoutDoc(layoutDoc, lc, ordo?.value ?? null) : null;
+  const layout = layoutDoc ? readLayoutDoc(layoutDoc, lc, structureOf(ordo)) : null;
   return { ordo, layout, diagnostics };
 }
 
