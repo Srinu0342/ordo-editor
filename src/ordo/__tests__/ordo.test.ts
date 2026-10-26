@@ -20,7 +20,7 @@ import { connectionEdge, rfEdge, rfNode } from "../rf-mapping.ts";
 import { resolve } from "../read.ts";
 import { parseAllDocuments } from "yaml";
 import { TUBE_TYPE } from "../../nodes/tube.ts";
-import { makeNode, sizeOfNode, textSize } from "../../nodes/defaults.ts";
+import { classHeight, makeNode, sizeOfNode, textSize } from "../../nodes/defaults.ts";
 import { SHAPE_KEYS } from "../../shapes/registry.ts";
 import { DEFAULT_EDGE_STYLE, newEdge } from "../../edgeStyle.ts";
 import type { OrdoLayoutFile, ResolvedDiagram } from "../types.ts";
@@ -245,20 +245,29 @@ test("a tube is a node like any other: it exports and reads back", () => {
 // ---------------------------------------------------------------------------
 // 5. Validator
 
+const BROKEN_DIAGNOSTICS = [
+  ["6:9", "duplicate-id", 'id "api" is used more than once (first on line 3)'],
+  ["8:30", "unknown-endpoint", 'edge "e1" to "cache" is not a node'],
+  [
+    "12:7",
+    "group-shape",
+    'group "vpc" cannot have a shape: it is drawn as a frame round its children. For a shape, list "vpc" in nodes as a plain id',
+  ],
+  ["13:5", "orphan-data", 'data for "ghost", which is not in nodes'],
+  ["16:14", "unknown-shape", 'unknown shape "blob"'],
+];
+
 test("the broken file yields exactly its five diagnostics", () => {
   const got = readDiagram(BROKEN).diagnostics.map((d) => [`${d.line}:${d.col}`, d.code, d.message]);
-  assert.deepEqual(got, [
-    ["6:9", "duplicate-id", 'id "api" is used more than once'],
-    ["8:30", "unknown-endpoint", 'edge "e1" to "cache" is not a node'],
-    ["12:7", "group-shape", 'group "vpc" cannot have a shape'],
-    ["13:5", "orphan-data", 'data for "ghost", which is not in nodes'],
-    ["16:14", "unknown-shape", 'unknown shape "blob"'],
-  ]);
+  assert.deepEqual(got, BROKEN_DIAGNOSTICS);
 });
 
-test("an unknown key stops at the schema pass", () => {
+test("an unknown key is reported in the same pass as every other error", () => {
   const got = readDiagram(`${BROKEN}      colour: red\n`).diagnostics.map((d) => [`${d.line}:${d.col}`, d.code, d.message]);
-  assert.deepEqual(got, [["17:7", "schema", 'data.nodes.db.colour: unknown key "colour"']]);
+  assert.deepEqual(got, [
+    ...BROKEN_DIAGNOSTICS,
+    ["17:7", "schema", 'data.nodes.db.colour: unknown key "colour"; a box takes kind, label, shape, type, textSize and textWeight'],
+  ]);
 });
 
 test("an unclosed flow map stops at the YAML pass", () => {
@@ -274,7 +283,7 @@ test("a duplicate map key stops at the YAML pass", () => {
   const read = readDiagram("ordo: 1\nnodes:\n  - a\ndata:\n  nodes:\n    a:\n      label: A\n      label: B\n");
   assert.deepEqual(
     read.diagnostics.map((d) => [d.code, d.line, d.col, d.message]),
-    [["yaml-syntax", 8, 7, "Map keys must be unique"]],
+    [["yaml-syntax", 8, 7, "Map keys must be unique; the same key appears twice in one map"]],
   );
 });
 
@@ -313,6 +322,26 @@ test("import with no layout places every node, and the export after it leaves th
   assert.deepEqual(Object.keys(layout.nodes!), ["client", "vpc", "gateway", "services", "api", "db", "queue"]);
   for (const id of ["vpc", "services"]) assert.ok(layout.nodes![id].w && layout.nodes![id].h, id);
   for (const id of ["client", "gateway", "api", "db", "queue"]) assert.equal(layout.nodes![id].w, undefined, id);
+});
+
+test("with no layout, a class takes the room its rows need, so the node below it is clear of it", () => {
+  const rows = (n: number) => `[${Array.from({ length: n }, (_, i) => `"field${i}: int"`).join(", ")}]`;
+  const text = [
+    "ordo: 1",
+    "nodes: [big, small]",
+    "edges: [{ id: e1, from: big, to: small }]",
+    "data:",
+    "  nodes:",
+    `    big: { kind: class, sections: [${rows(6)}, ${rows(4)}] }`,
+    "    small: { kind: class }",
+    "",
+  ].join("\n");
+  const { nodes } = importOrdo(text);
+  const at = (id: string) => nodes.find((n) => n.id === id)!.position.y;
+  // ten rows of about 22px under a 28px name band, against the 118px a class is dropped at
+  assert.ok(at("small") - at("big") >= classHeight([Array(6).fill(""), Array(4).fill("")]), `${at("small") - at("big")}`);
+  assert.ok(classHeight([Array(6).fill(""), Array(4).fill("")]) > 250);
+  assert.ok(classHeight([["field: type"], ["method()"]]) <= 118); // the palette's class fits its own size
 });
 
 test("an empty canvas exports as an empty diagram", () => {
@@ -462,10 +491,10 @@ test("a second line typed into a one-line entry opens it up into a block", () =>
 test("alignment is checked: a known side, and only on a text node", () => {
   const codes = (text: string) => readDiagram(text).diagnostics.map((d) => [d.code, d.message]);
   assert.deepEqual(codes(LINES.replace("textAlign: center", "textAlign: justify")), [
-    ["schema", "data.nodes.note.textAlign: must be equal to one of the allowed values"],
+    ["schema", 'data.nodes.note.textAlign: must be one of left, center, right, not "justify"'],
   ]);
   assert.deepEqual(codes("ordo: 1\nnodes: [b]\ndata:\n  nodes:\n    b: { textAlign: center }\n"), [
-    ["kind-field", 'box "b" has no field "textAlign"'],
+    ["kind-field", 'box "b" has no field "textAlign"; a box takes kind, label, shape, type, textSize and textWeight'],
   ]);
 });
 
@@ -514,12 +543,12 @@ test("text size and weight reach the canvas and are written back as they were", 
 test("text style is checked: a known weight, a size in range, on a kind that shows text", () => {
   const codes = (text: string) => readDiagram(text).diagnostics.map((d) => [d.code, d.message]);
   assert.deepEqual(codes(STYLED.replace("textWeight: bold", "textWeight: heavy")), [
-    ["schema", "data.nodes.api.textWeight: must be equal to one of the allowed values"],
+    ["schema", 'data.nodes.api.textWeight: must be one of regular, semibold, bold, not "heavy"'],
   ]);
   assert.equal(codes(STYLED.replace("textSize: 20", "textSize: 200"))[0][0], "schema");
   assert.deepEqual(
     codes("ordo: 1\nnodes: [t]\ndata:\n  nodes:\n    t: { kind: tube, textSize: 14 }\n"),
-    [["kind-field", 'tube "t" has no field "textSize"']],
+    [["kind-field", 'tube "t" has no field "textSize"; a tube takes kind, label, type, slots, taps, variant, attach and align']],
   );
 });
 

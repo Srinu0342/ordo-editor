@@ -328,8 +328,8 @@ export default function OrdoImportDialog({
   );
 }
 
-// The problems, as "line:col  message", in file order. A warning names an
-// entry the import will skip.
+// The problems, as "line:col  message", in file order. A layout orphan names
+// an entry the import will skip; the other warnings say what they mean.
 function Diagnostics({ items, onPick }: { items: Diagnostic[]; onPick: (d: Diagnostic) => void }) {
   return (
     <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: 2 }}>
@@ -359,7 +359,7 @@ function Diagnostics({ items, onPick }: { items: Diagnostic[]; onPick: (d: Diagn
             </code>
             <span>
               {d.message}
-              {d.severity === "warning" && <span style={{ color: "var(--ui-faint)" }}> (will be ignored)</span>}
+              {d.code === "layout-orphan" && <span style={{ color: "var(--ui-faint)" }}> (will be ignored)</span>}
             </span>
           </button>
         </li>

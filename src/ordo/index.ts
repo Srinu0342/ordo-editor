@@ -1,6 +1,6 @@
 import type { Edge, Node } from "@xyflow/react";
 import type { Document } from "yaml";
-import { detectStyle, joinDocuments, readBundle, readLayout, resolve, type ReadResult, type YamlStyle } from "./read.ts";
+import { detectStyle, joinDocuments, readBundle, readLayout, resolve, structureOf, type ReadResult, type YamlStyle } from "./read.ts";
 import { toReactFlow } from "./to-react-flow.ts";
 import { fromReactFlow } from "./from-react-flow.ts";
 import { writeLayout, writeOrdo } from "./write.ts";
@@ -70,7 +70,7 @@ export function readDiagram(text: string, layoutText?: string | null): OrdoRead 
         file: "layout",
       });
     else {
-      layout = readLayout(layoutText, bundle.ordo?.value ?? null);
+      layout = readLayout(layoutText, structureOf(bundle.ordo));
       diagnostics.push(...layout.diagnostics);
     }
   }

@@ -10,7 +10,10 @@ see [ordo-rf-mapping.md](ordo-rf-mapping.md).
 
 - `/api` is the local repo API: list folders, read, write and delete
   `.ordo/<name>/ordo.yaml`, and rename a diagram's folder.
-- `/mcp` is an MCP endpoint over Streamable HTTP.
+- `/mcp` is an MCP endpoint over Streamable HTTP, stateless, with two
+  read-only tools: `ordo_guide` teaches an agent the file format, and
+  `validate_ordo` checks the file it wrote. The agent writes the file itself;
+  no tool builds a diagram piece by piece.
 - Every other path is the editor.
 
 In dev, Vite runs inside this server as middleware, so the editor keeps hot

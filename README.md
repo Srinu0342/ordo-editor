@@ -148,13 +148,13 @@ the new diagram shows up as a tab within about ten seconds, and later edits to
 the open one load by themselves. When you edit on the canvas, the agent sees
 your changes the next time it reads the file.
 
-Ordo also serves MCP at `/mcp`, so the agent can check its work before you see
-it:
+Ordo also serves MCP at `/mcp`, so the agent can learn the format, then check
+its work before you see it:
 
 | Tool            | What it does |
 | --------------- | ------------ |
-| `validate_ordo` | Parses a diagram and returns the same diagnostics the import dialog shows, with line and column. |
-| `list_shapes`   | Lists every shape a box can take, by palette group, with the Mermaid aliases that map to them. |
+| `ordo_guide`    | Teaches the format. With no topic it returns the core page: the file's structure, every node kind, edge field and shape, an example and the rules. Topics cover sequence diagrams, class and ER diagrams, editing a diagram that already exists, and turning Mermaid into Ordo. |
+| `validate_ordo` | Checks a diagram, by its path in the workspace or by its text, and lists every problem in one pass: line and column, the values allowed, and the nearest match for a misspelling. |
 
 To connect Claude Code:
 
@@ -162,10 +162,12 @@ To connect Claude Code:
 claude mcp add --transport http ordo http://localhost:5173/mcp
 ```
 
-Any other client that speaks Streamable HTTP can use the same URL. The tools
-work only on file text and never touch the canvas in your browser. Good
-starting points for an agent are [examples/checkout.yml](examples/checkout.yml),
-which uses every node kind, and the [format reference](docs/ordo-rf-mapping.md).
+Any other client that speaks Streamable HTTP can use the same URL. When a
+client connects, Ordo asks the agent to read the guide before it writes a
+diagram. Both tools only read. They never write a file or touch the canvas in
+your browser, and `validate_ordo` opens nothing but `.ordo/<name>/ordo.yaml`
+files under the workspace root. The guide is plain Markdown in
+[docs/agents/](docs/agents/), so you can read exactly what your agent is told.
 
 ## Run it for real
 
