@@ -20,6 +20,7 @@
     "@modelcontextprotocol/express": "^2.0.2",
     "@modelcontextprotocol/node": "^2.1.1",
     "@modelcontextprotocol/server": "^2.3.1",
+    "@resvg/resvg-js": "^2.6.2",
     "@tisoap/react-flow-smart-edge": "^5.0.0",
     "@xyflow/react": "^12.12.0",
     "ajv": "^8.20.0",

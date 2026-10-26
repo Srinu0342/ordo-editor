@@ -1,13 +1,16 @@
 # From Mermaid to Ordo
 
 Read the Mermaid for what is there and what connects to what, then write the
-Ordo file directly. Leave Mermaid's layout behind: Ordo lays the diagram out
-itself, top to bottom, and the user arranges it from there. Everything on the
-core page still holds.
+Ordo file directly, layout included, as topic `layout` says. Mermaid has no
+positions to carry over, only a direction. Everything on the core page still
+holds.
 
 ## Flowcharts
 
-`flowchart TD` or `LR` says nothing Ordo needs. Keep Mermaid's node ids as
+`flowchart TD` or `TB` lays out top to bottom, and `LR` left to right: lay
+the Ordo diagram out the same way. When it draws a process, with steps and
+decisions, read topic `flowchart` and lay it out as that page says; Mermaid
+draws architecture with the same syntax. Keep Mermaid's node ids as
 the Ordo ids. Mermaid's edges have no ids, so give each one a short id of
 your own (`e1`, `e2` … or `api-db`).
 

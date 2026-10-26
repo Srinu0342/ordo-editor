@@ -1,15 +1,16 @@
 # Editing a diagram that already exists
 
-The user may have arranged the diagram by hand. Your job is to change what it
-says and to leave where things sit to them. Everything on the core page still
-holds. A sequence diagram is the exception: its layout is yours to rewrite, as
-topic `sequence` says.
+The user may have arranged the diagram by hand. Change what it says, keep
+where things already sit, and place what you add yourself. Everything on the
+core page and topic `layout` still holds. A sequence diagram is laid out on
+its grid: renumber the rows and rewrite its layout, as topic `sequence` says.
 
 ## Read
 
-Read the file down to the `---` line and stop. What follows is the layout:
-positions and sizes the editor writes. A file with no `---` has no layout
-yet.
+Read the whole file. Below the `---` line is where everything sits, which you
+need to place a new node beside the ones it connects to. A file with no `---`
+has no layout yet: every node in it is placed by Ordo when it opens. Call
+`render_ordo` before you change anything, to see what the user sees.
 
 ## Change
 
@@ -25,25 +26,29 @@ yet.
   `validate_ordo` names any edge you missed.
 - To put a new step into an existing edge, a → b, remove that edge and add
   a → new and new → b, with ids of their own.
-- To move a node into a group, move its id into the group's list in `nodes`.
-  Its saved position is then read inside the group, so tell the user it may
-  need moving.
-- Never edit below `---`. Lines there for things you removed are dropped on the
-  next save; `validate_ordo` reports them as warnings, which is expected.
-- Starting the arrangement over is the user's call. If they ask for it, delete
-  everything from the `---` down, and Ordo lays the diagram out afresh.
+- To move a node into a group, move its id into the group's list in `nodes`,
+  and give it a new position: inside a group, x and y count from the group's
+  corner.
+- Below `---`, change only what your edit needs: positions for what you add or
+  move, and sides for new edges. Leave the rest as it is. Lines there for
+  things you removed are dropped on the next save; `validate_ordo` reports
+  them as warnings, which is expected.
+- Starting the arrangement over is the user's call. If they ask for it, write
+  a new layout for the whole diagram, as topic `layout` says.
 
-## Where new nodes land
+## Placing new nodes
 
-- A node you add next to nodes that already have positions is put in a column
-  to the right of them, level with the topmost, one under another. In a group,
-  that is often outside the group's frame: a group keeps the size it was saved
-  with.
-- When every node in a group is new, or the whole file has no layout, Ordo lays
-  them out top to bottom along the edges, as for a new diagram.
-- A new group is sized to fit its children.
-- So after adding nodes, tell the user which ones are new, so they can drag
-  them into place. `validate_ordo` says how many nodes have no position yet.
+- Put each new node next to what it connects to, lined up with its neighbours
+  as topic `layout` says. If there is no room, move as few nodes as you can to
+  make some, and tell the user which ones you moved.
+- A group with a saved `w` and `h` keeps that size, so a node you put past its
+  frame is drawn outside it. Make the group bigger, or take its `w` and `h` out
+  so it fits its children.
+- A node you leave without a position is put in a column to the right of its
+  placed neighbours, level with the topmost, one under another: often outside
+  its group's frame. `validate_ordo` says how many nodes have no position.
+- Call `render_ordo` after the change, and check the new nodes sit where the
+  diagram reads well.
 
 ## How the editor picks up your change
 

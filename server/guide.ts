@@ -13,10 +13,15 @@ import {
   TEXT_WEIGHTS,
   type GuidePage,
 } from "../src/ordo/types.ts";
-import { measureText } from "../src/measure.ts";
+import { EDGE_LABEL_FONT } from "../src/edgeStyle.ts";
+import { LINE_HEIGHT, measureText } from "../src/measure.ts";
+import { GROUP_FONT, NODE_TYPE_DEFAULTS, TEXT_FONT, TEXT_PAD } from "../src/nodes/defaults.ts";
+import { GROUP_HEADER, GROUP_PAD } from "../src/ordo/rf-mapping.ts";
 import { OP, flatten } from "../src/ops.ts";
 import type { LabelOp } from "../src/ops.ts";
 import { SHAPE_GROUPS, drawShape, shapeDef } from "../src/shapes/registry.ts";
+import type { Font } from "../src/textStyle.ts";
+import { classLayout } from "./render/text.ts";
 
 // The agent guide that ordo_guide serves: how to write an Ordo file, for a
 // model that has never seen one.
@@ -62,8 +67,43 @@ function shapeLines(): string {
   }).join("\n");
 }
 
+/** Every shape's size as it is dropped, w × h, one line per palette group. */
+function sizeLines(): string {
+  return SHAPE_GROUPS.map(([, title, set]) => {
+    const sizes = Object.entries(set).map(([key, s]) => `\`${key}\` ${s.size[0]} × ${s.size[1]}`);
+    return `- ${title}: ${sizes.join(", ")}`;
+  }).join("\n");
+}
+
+/** About how wide a letter of ordinary words is in `font`, in px, one decimal; `caps` for words in capitals, which run wider. */
+const letter = (font: Font, caps = false) => {
+  const sample = caps ? SAMPLE.toUpperCase() : SAMPLE;
+  return (measureText(sample, font).width / sample.length).toFixed(1);
+};
+
+/** The size of each kind that isn't a shape: what it takes its size from, in numbers from the code. */
+function kindSizeLines(): string {
+  const [classW] = NODE_TYPE_DEFAULTS.compartment.size;
+  const rows = [1, 2, 3, 4, 5].map((n) => {
+    const h = Math.ceil(classLayout({ sections: [Array(n).fill("x"), Array(n).fill("x")] }).height);
+    return `${n} + ${n} rows ${h}`;
+  });
+  const [py, px] = TEXT_PAD;
+  const pillH = Math.ceil(EDGE_LABEL_FONT.size * 1.4 + 6);
+  return [
+    `- group: no size of its own. It is a frame round its children, ${GROUP_PAD} px past the rightmost and the lowest, measured from its own corner; see Groups. Its title sits on the top border from 12 px in, about ${letter(GROUP_FONT)} px a letter plus 14 px long.`,
+    `- class: ${classW} px wide, and as tall as its rows. With two compartments: ${rows.join(", ")} px; an empty compartment is as tall as one row.`,
+    `- text: as big as its words, about ${letter(TEXT_FONT)} px a letter and ${TEXT_FONT.size * LINE_HEIGHT} px a line at ${TEXT_FONT.size} px, plus ${2 * (px + 1)} px across and ${2 * (py + 1)} px down. A size you give one is ignored.`,
+    `- an edge's label: a pill about ${letter(EDGE_LABEL_FONT)} px a letter at ${EDGE_LABEL_FONT.size} px, or ${letter(EDGE_LABEL_FONT, true)} px for capitals, plus 20 px, and ${pillH} px tall for each line.`,
+  ].join("\n");
+}
+
 const LISTS: Record<string, () => string> = {
   shapes: shapeLines,
+  sizes: sizeLines,
+  kindSizes: kindSizeLines,
+  groupPad: () => `${GROUP_PAD}`,
+  groupTop: () => `${GROUP_HEADER + GROUP_PAD}`,
   kinds: () => words(LEAF_KINDS),
   routes: () => words(EDGE_ROUTES),
   lines: () => words(LINES),

@@ -1,9 +1,10 @@
 # Writing Ordo diagrams
 
 Ordo is a diagram editor whose diagrams are YAML files in the repo they
-describe. You write the file and the editor draws it. This page covers
-flowcharts, architecture and other box-and-arrow diagrams. The topic pages
-listed at the end cover the rest.
+describe. You write the file and the editor draws it. This page covers what
+every diagram is made of, which is all an architecture diagram or another
+box-and-arrow diagram needs. The topic pages listed at the end cover
+flowcharts, sequence diagrams, class and ER diagrams, and the rest.
 
 ## The file
 
@@ -12,18 +13,21 @@ the diagram's name, and its tab in the editor. Names use letters, digits,
 spaces, `-`, `_` and `.`, start with a letter or digit, and run to 64
 characters: `.ordo/checkout-flow/ordo.yaml`.
 
-The file holds the structure, which you write. After a `---` line the editor
-keeps the layout: where everything sits. A new file is the structure alone.
+The file holds the structure: what is in the diagram and what connects to
+what. After a `---` line comes the layout: where everything sits. You write
+both, and the editor keeps the layout up to date when the user moves things.
 
 If the user has the repo open in Ordo, a new diagram appears as a tab within
 about ten seconds, and changes to an open one load by themselves.
 
 ## Steps
 
-1. Write the structure, as below.
+1. Write the structure, as below, and its layout, as topic `layout` shows.
 2. Call `validate_ordo` with the file's `path`. Fix every error it lists and
    call it again, until it reports none. Read its warnings too.
-3. Tell the user the diagram's name.
+3. Call `render_ordo` with the same `path` and look at the diagram. Fix what
+   reads badly, as topic `layout` says, and draw it again.
+4. Tell the user the diagram's name.
 
 ## The structure
 
@@ -132,21 +136,25 @@ outside system; `sm-circ` and `fr-circ` for start and stop. Mermaid's long names
   `curved` a smooth curve.
 - `placement`: where the label sits: {{list:placements}} [`center`].
 - `textSize` and `textWeight`: the label's text [13 px, `regular`].
-- `hidden`: `true` draws nothing but still counts for layout [`false`].
+- `hidden`: `true` draws nothing, but still counts when Ordo places nodes
+  that have no position [`false`].
 
 ## Layout
 
-You never write positions. When Ordo opens a file that has no layout, it lays
-out each group, and then the canvas, top to bottom along the edges: an edge
-from `a` to `b` puts `b` below `a`. So list nodes in reading order and point
-edges the way things flow. An edge that points back up the flow, such as a
-retry loop, crosses the others; draw one only when the diagram needs it. An
-edge from outside a group to a node inside it has its label on the group's
-title; give that edge `placement: right`. To put one node below another without drawing a line,
-join them with a `hidden: true` edge. The user tidies the rest by hand, and
-the editor saves where everything ended up.
+Write where every node sits, in the layout after the structure. Topic
+`layout` says how, with every shape's size, a grid to place nodes on, and how
+to keep lines and labels clear of each other. Then look at the diagram with
+`render_ordo`: it draws the file as the editor will show it.
+
+A node you leave without a position is placed by Ordo when the diagram opens:
+each group, then the canvas, top to bottom along the edges, so an edge from
+`a` to `b` puts `b` below `a`. That doesn't know what the diagram means, and
+it often crowds lines and labels together, so place nodes yourself.
 
 ## Example
+
+The main path runs down one column, centred at x = 320, and the two stores
+sit in a row below, their edges pinned to leave the decision from the bottom.
 
 ```yaml
 ordo: 1
@@ -175,20 +183,35 @@ data:
     mailer: { label: Email service, type: service/email }
   edges:
     browse: { label: browses, placement: right }
-    order: { label: POST /orders, route: straight }
+    order: { label: POST /orders, route: straight, placement: right }
     save: { label: "yes", line: thick }
     receipt: { label: sends receipt, line: dashed, color: "#16a34a" }
+---
+ordo-layout: 1
+nodes:
+  customer: { x: 272, y: 0 }
+  shop: { x: 216, y: 136 }
+  web: { x: 24, y: 56 }
+  api: { x: 24, y: 176 }
+  paid: { x: 34, y: 288 }
+  db: { x: 90, y: 600 }
+  mailer: { x: 440, y: 600 }
+edges:
+  save: { from: bottom, to: top }
+  receipt: { from: bottom, to: top }
 ```
 
 ## Rules
 
-1. **Leave out the layout.** Write the structure and stop. Ordo places what
-   has no position, and coordinates you guess would only be in the way. (A
-   sequence diagram is the one exception; see its topic.)
-2. **Read only up to `---`.** What follows it is positions and sizes for the
-   editor. It is long, and nothing in it changes what the diagram says.
-3. **Never edit below `---`.** That part is the user's arrangement, and the
-   editor writes it. Leave stale lines there too: one for a node you removed
+1. **Write the layout.** Give every node a position, as topic `layout` says,
+   and look at the result with `render_ordo`. (A sequence diagram has a grid
+   of its own; see its topic.)
+2. **Read the whole file.** Below `---` is where everything sits, which you
+   need to place anything new beside what is there.
+3. **Keep the user's arrangement.** When you change a diagram, leave the
+   positions of the nodes you aren't moving as they are: the user may have
+   placed them by hand. Rearrange it only when they ask, or when the drawing
+   shows it needs it. Leave stale lines there too: one for a node you removed
    is dropped on the next save.
 4. **Keep ids stable.** Positions are filed under ids. To rename something,
    change its `label`; a new id is a new node, and it loses its place.
@@ -206,11 +229,16 @@ data:
 
 Call `ordo_guide` again with `topic` set to one of these:
 
+- `layout`: before every diagram: where to put each node, every shape's
+  size, the sides edges use, and how to keep lines and labels clear.
+- `flowchart`: before a flowchart or a process diagram: which shape means
+  what, decisions, loops, paths that meet again, parallel paths and
+  swimlanes.
 - `sequence`: before a sequence diagram: participants, lifelines, activation
   bars, messages, loop and alt frames, notes.
 - `class`: before a UML class diagram or an ER diagram: class boxes with
   compartments, and the UML and crow's-foot markers.
 - `editing`: before you change a diagram that already exists: what to keep,
-  where new nodes land, and how the editor picks up your change.
+  where to put what you add, and how the editor picks up your change.
 - `mermaid`: when you are given Mermaid, or think in it: how each Mermaid
   piece maps onto Ordo.

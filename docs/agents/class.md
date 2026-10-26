@@ -35,11 +35,10 @@ data:
 
 ## UML relationships
 
-Ordo lays a diagram out from the `from` node down to the `to` node. To keep
-parents above children and wholes above their parts, write each relationship
-from the parent or the whole, and put its marker at the `start`. A marker is
-drawn at the end it is set on, pointing into that node: the triangle at the
-parent, the diamond at the whole.
+Place parents above children and wholes above their parts, and write each
+relationship from the parent or the whole, with its marker at the `start`. A
+marker is drawn at the end it is set on, pointing into that node: the triangle
+at the parent, the diamond at the whole. Topic `layout` has the spacing.
 
 | Relationship | Edge | `data.edges.<id>` |
 |---|---|---|
@@ -65,7 +64,7 @@ foot marker at each end:
 - `er-zero-many`: zero or more
 - `er-many`: many
 
-Write it from the "one" side, so the parent entity sits above: "a customer
+Write it from the "one" side, and place the parent entity above: "a customer
 places zero or more orders" is `from: customer, to: order` with
 `start: er-one, end: er-zero-many, label: places`. If the diagram tells
 identifying relationships from the rest, draw the non-identifying ones
@@ -122,6 +121,14 @@ data:
     is-wallet: { start: inheritance, end: none, line: dashed }
     lines: { start: composition, end: none, label: 1..* }
     pays: { end: dependency, line: dashed, label: uses }
+---
+ordo-layout: 1
+nodes:
+  order: { x: 0, y: 0 }
+  payable: { x: 390, y: 11 }
+  item: { x: 0, y: 200 }
+  card: { x: 260, y: 200 }
+  wallet: { x: 520, y: 200 }
 ```
 
 ## Example: entities
@@ -147,4 +154,11 @@ data:
     places: { label: places, start: er-one, end: er-zero-many }
     holds: { label: holds, start: er-one, end: er-one-many }
     sold-as: { label: sold as, start: er-one, end: er-zero-many }
+---
+ordo-layout: 1
+nodes:
+  customer: { x: 0, y: 0 }
+  order: { x: 0, y: 184 }
+  product: { x: 260, y: 184 }
+  line: { x: 130, y: 368 }
 ```

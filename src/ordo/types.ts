@@ -241,7 +241,7 @@ export type DiagnosticCode =
  * ordo_guide): the core page, which ordo_guide returns when no topic is given,
  * and one page per topic.
  */
-export const GUIDE_TOPICS = ["sequence", "class", "editing", "mermaid"] as const;
+export const GUIDE_TOPICS = ["layout", "flowchart", "sequence", "class", "editing", "mermaid"] as const;
 export type GuideTopic = (typeof GUIDE_TOPICS)[number];
 export type GuidePage = "core" | GuideTopic;
 

@@ -42,10 +42,21 @@ source.
 The MCP tool `ordo_guide` serves the Markdown pages in
 [`docs/agents/`](agents/): `core.md`, and one page per topic. The prose is
 written by hand. The lists are not: a page writes `{{list:shapes}}`,
-`{{list:markers}}` and so on, and [`server/guide.ts`](../server/guide.ts) fills
-them in from the shape registry and the format's vocabularies when the page is
-served. Pages are read on every call, so an edit shows up without a restart.
-Every YAML example in a page must be a valid diagram; `npm test` checks them.
+`{{list:sizes}}`, `{{list:markers}}` and so on, and
+[`server/guide.ts`](../server/guide.ts) fills them in from the shape registry,
+the node defaults and the format's vocabularies when the page is served. Pages
+are read on every call, so an edit shows up without a restart. Every YAML
+example in a page must be a valid diagram; `npm test` checks them. Draw an
+example to see it before you put it in a page:
+
+```bash
+npx tsx server/render/cli.ts path/to/ordo.yaml out.png   # as render_ordo draws it
+```
+
+The renderer in [`server/render/`](../server/render/) mirrors what the canvas
+draws: a change to how a node component lays itself out (a padding, a font, a
+border) needs the same change there, or `render_ordo` shows the agent
+something the editor doesn't.
 
 ## Project layout
 
@@ -53,8 +64,9 @@ Every YAML example in a page must be a valid diagram; `npm test` checks them.
 server/
 ├── index.ts             One process: the editor, /api and /mcp
 ├── api.ts               Local repo API: host and origin checks, routes
-├── mcp.ts               MCP tools: ordo_guide, validate_ordo
+├── mcp.ts               MCP tools: ordo_guide, validate_ordo, render_ordo
 ├── guide.ts             The agent guide: docs/agents/ with its lists filled in
+├── render/              render_ordo: a diagram to SVG to PNG, with no browser
 ├── workspace.ts         Workspace root and path rules
 ├── config.ts            CONFIG's switches, checked at start-up
 └── diagrams.ts          .ordo/<name>/ordo.yaml: reads, hash-checked atomic writes
