@@ -148,13 +148,14 @@ the new diagram shows up as a tab within about ten seconds, and later edits to
 the open one load by themselves. When you edit on the canvas, the agent sees
 your changes the next time it reads the file.
 
-Ordo also serves MCP at `/mcp`, so the agent can learn the format, then check
-its work before you see it:
+Ordo also serves MCP at `/mcp`, so the agent can learn the format, lay the
+diagram out itself, then check and look at its work before you see it:
 
 | Tool            | What it does |
 | --------------- | ------------ |
-| `ordo_guide`    | Teaches the format. With no topic it returns the core page: the file's structure, every node kind, edge field and shape, an example and the rules. Topics cover sequence diagrams, class and ER diagrams, editing a diagram that already exists, and turning Mermaid into Ordo. |
+| `ordo_guide`    | Teaches the format. With no topic it returns the core page: the file's structure, every node kind, edge field and shape, an example and the rules. Topics cover laying a diagram out (every shape's size, a grid, which sides edges use, keeping lines and labels clear), flowcharts (decisions, loops, parallel paths, swimlanes), sequence diagrams, class and ER diagrams, editing a diagram that already exists, and turning Mermaid into Ordo. |
 | `validate_ordo` | Checks a diagram, by its path in the workspace or by its text, and lists every problem in one pass: line and column, the values allowed, and the nearest match for a misspelling. |
+| `render_ordo`   | Draws a diagram as a PNG, the way the editor shows it when the file opens, so the agent can see what overlaps, where lines run and which labels collide, and fix the layout before you look. It draws without a browser. |
 
 To connect Claude Code:
 
@@ -164,9 +165,10 @@ claude mcp add --transport http ordo http://localhost:5173/mcp
 
 Any other client that speaks Streamable HTTP can use the same URL. When a
 client connects, Ordo asks the agent to read the guide before it writes a
-diagram. Both tools only read. They never write a file or touch the canvas in
-your browser, and `validate_ordo` opens nothing but `.ordo/<name>/ordo.yaml`
-files under the workspace root. The guide is plain Markdown in
+diagram, and to validate and draw it after. All three tools only read. They
+never write a file or touch the canvas in your browser, and `validate_ordo`
+and `render_ordo` open nothing but `.ordo/<name>/ordo.yaml` files under the
+workspace root. The guide is plain Markdown in
 [docs/agents/](docs/agents/), so you can read exactly what your agent is told.
 
 ## Run it for real

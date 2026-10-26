@@ -1,6 +1,7 @@
-// The /mcp endpoint over real HTTP: the two tools a model sees and what they
-// answer, the guide's pages, validate_ordo by text and by path (with the same
-// root and symlink rules as /api), and the Host and Origin checks.
+// The /mcp endpoint over real HTTP: the three tools a model sees and what they
+// answer, the guide's pages, validate_ordo and render_ordo by text and by path
+// (with the same root and symlink rules as /api), and the Host and Origin
+// checks.
 import { test } from "node:test";
 import type { TestContext } from "node:test";
 import assert from "node:assert/strict";
@@ -101,7 +102,7 @@ function raw(port: number, method: string, headers: Record<string, string>, body
   });
 }
 
-test("initialize tells the model to read the guide before it writes, and to validate after", async (t) => {
+test("initialize tells the model to read the guide before it writes, to validate after, and to look at the drawing", async (t) => {
   const s = await serve(t);
   const { result } = await rpc(s, "initialize", {
     protocolVersion: "2025-06-18",
@@ -110,14 +111,16 @@ test("initialize tells the model to read the guide before it writes, and to vali
   });
   assert.equal(result.serverInfo.name, "ordo");
   assert.match(result.instructions, /call ordo_guide/);
+  assert.match(result.instructions, /layout topic/);
   assert.match(result.instructions, /validate_ordo/);
+  assert.match(result.instructions, /render_ordo/);
 });
 
-test("tools/list: ordo_guide and validate_ordo, both read-only; list_shapes is gone", async (t) => {
+test("tools/list: ordo_guide, validate_ordo and render_ordo, all read-only; list_shapes is gone", async (t) => {
   const s = await serve(t);
   const { result } = await rpc(s, "tools/list");
   const tools = result.tools as { name: string; description: string; annotations: { readOnlyHint?: boolean } }[];
-  assert.deepEqual(tools.map((x) => x.name), ["ordo_guide", "validate_ordo"]);
+  assert.deepEqual(tools.map((x) => x.name), ["ordo_guide", "validate_ordo", "render_ordo"]);
   for (const tool of tools) assert.equal(tool.annotations.readOnlyHint, true, tool.name);
   assert.match(tools[0].description, /^Call this before you write or edit an Ordo diagram/);
 });
@@ -141,7 +144,7 @@ test("ordo_guide serves each topic as a page of its own; an unknown topic is ref
     assert.match(text, /^# /, topic);
     assert.notEqual(text, core, topic);
   }
-  const wrong = await call(s, "ordo_guide", { topic: "flowchart" });
+  const wrong = await call(s, "ordo_guide", { topic: "gantt" });
   assert.equal(wrong.isError, true);
   assert.match(wrong.text, /sequence/);
 });
@@ -150,7 +153,10 @@ test("validate_ordo by text: a valid diagram says what it holds", async (t) => {
   const s = await serve(t);
   const { text, isError } = await call(s, "validate_ordo", { text: VALID });
   assert.equal(isError, false);
-  assert.equal(text, "The diagram is valid: 3 nodes (1 group), 1 edge; no layout yet: Ordo lays it out when the diagram opens.");
+  assert.equal(
+    text,
+    'The diagram is valid: 3 nodes (1 group), 1 edge; no layout: Ordo will place every node top to bottom when the diagram opens; to choose where things go, write the layout (see ordo_guide topic "layout").',
+  );
 });
 
 test("validate_ordo lists every problem in one pass, at line and column, with the nearest match and the guide's page", async (t) => {
@@ -181,9 +187,52 @@ test("validate_ordo by path, absolute or relative to the workspace root, reads t
   assert.equal(broken.isError, false);
   assert.ok(broken.text.startsWith(`${absolute} has 3 errors, 1 warning.`), broken.text);
 
-  // a layout with a node it doesn't have yet: the agent is told Ordo will place it
+  // a layout with a node it doesn't have yet: the agent is told Ordo will place it, and to place it itself
   await fs.writeFile(path.join(s.root, "demo", ".ordo", "main", "ordo.yaml"), `${VALID}---\nordo-layout: 1\nnodes:\n  g: { x: 0, y: 0, w: 200, h: 120 }\n  a: { x: 24, y: 56 }\n`);
-  assert.match((await call(s, "validate_ordo", { path: "demo/.ordo/main/ordo.yaml" })).text, /1 node without a position yet: Ordo places it/);
+  assert.match(
+    (await call(s, "validate_ordo", { path: "demo/.ordo/main/ordo.yaml" })).text,
+    /1 node without a position: Ordo will place it when the diagram opens; give it a position yourself \(see ordo_guide topic "layout"\)/,
+  );
+});
+
+/** render_ordo's answer: its one content block, and whether the call failed. */
+async function render(s: Served, args: object): Promise<{ content: { type: string; data?: string; mimeType?: string; text?: string }[]; isError: boolean }> {
+  const { result, error } = await rpc(s, "tools/call", { name: "render_ordo", arguments: args });
+  assert.equal(error, undefined, JSON.stringify(error));
+  return { content: result.content, isError: result.isError === true };
+}
+
+const PNG_SIGNATURE = "89504e470d0a1a0a";
+
+test("render_ordo draws a diagram as a PNG image, by text or by path, and nothing else", async (t) => {
+  const s = await serve(t);
+  for (const args of [{ text: VALID }, { path: "demo/.ordo/main/ordo.yaml" }]) {
+    const { content, isError } = await render(s, args);
+    assert.equal(isError, false, JSON.stringify(args));
+    assert.equal(content.length, 1);
+    const [image] = content;
+    assert.equal(image.type, "image");
+    assert.equal(image.mimeType, "image/png");
+    const png = Buffer.from(image.data!, "base64");
+    assert.equal(png.subarray(0, 8).toString("hex"), PNG_SIGNATURE);
+    assert.ok(png.readUInt32BE(16) > 100 && png.readUInt32BE(20) > 100, "a picture of some size");
+  }
+});
+
+test("render_ordo refuses a diagram with errors, and what validate_ordo refuses, as a failed call", async (t) => {
+  const s = await serve(t);
+  const broken = await render(s, { path: "demo/.ordo/broken/ordo.yaml" });
+  assert.equal(broken.isError, true);
+  assert.match(broken.content[0].text!, /^demo\/\.ordo\/broken\/ordo\.yaml has 3 errors, so it can't be drawn\. Call validate_ordo/);
+  for (const [args, message] of [
+    [{}, /^Pass path/],
+    [{ path: "demo/README.md" }, /is not a diagram file/],
+    [{ path: "../demo/.ordo/main/ordo.yaml" }, /may not contain \.\./],
+  ] as [object, RegExp][]) {
+    const { content, isError } = await render(s, args);
+    assert.equal(isError, true, JSON.stringify(args));
+    assert.match(content[0].text!, message, JSON.stringify(args));
+  }
 });
 
 test("validate_ordo refuses what it can't check, as a failed call with a sentence", async (t) => {

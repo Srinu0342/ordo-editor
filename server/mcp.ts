@@ -11,37 +11,39 @@ import { resolve } from "../src/ordo/read.ts";
 import type { Diagnostic } from "../src/ordo/index.ts";
 import { DIAGRAM_FILE, ORDO_DIR, readDiagramFile } from "./diagrams.ts";
 import { guidePage } from "./guide.ts";
+import { renderDiagram } from "./render/png.ts";
 import { HttpError, insideRoot, parseRel, resolveInRoot } from "./workspace.ts";
 import type { Workspace } from "./workspace.ts";
 
 // MCP over Streamable HTTP, at /mcp on the same port as the editor.
 //
-// Two tools, both read-only. The model learns the format from ordo_guide,
-// writes the file itself, and checks it with validate_ordo. Nothing here
-// builds a diagram piece by piece: the file is the interface, and agents that
-// use Ordo can already write files.
+// Three tools, all read-only. The model learns the format from ordo_guide,
+// writes the file itself, layout included, checks it with validate_ordo, and
+// looks at it with render_ordo. Nothing here builds a diagram piece by piece:
+// the file is the interface, and agents that use Ordo can already write files.
 //
 // Stateless: every POST gets a fresh server and transport, and nothing is kept
 // between calls. That suits the dev server, which `tsx watch` restarts on every
 // edit; with sessions, each restart would cut the client off.
 //
 // The tools only reach what runs in Node. The diagram being drawn lives in the
-// browser tab, so nothing here can see or change the canvas; the editor's
-// Sync picks up a file the agent writes.
+// browser tab, so nothing here can see or change the canvas: render_ordo draws
+// the file as the editor would open it, not what is on screen, and the
+// editor's Sync picks up a file the agent writes.
 
 // Sent once, when a client connects; most put it in front of the model.
 const INSTRUCTIONS =
-  "Ordo draws diagrams from YAML files kept in the repo, at .ordo/<name>/ordo.yaml. Before you write or edit one, call ordo_guide to learn the format. After every change, call validate_ordo with the file's path and fix what it reports.";
+  "Ordo draws diagrams from YAML files kept in the repo, at .ordo/<name>/ordo.yaml. Before you write or edit one, call ordo_guide to learn the format, and its layout topic to place things yourself. After every change, call validate_ordo with the file's path and fix what it reports, then call render_ordo to see the diagram and fix what looks wrong.";
 
 // "core" is accepted as well as no topic: an agent told about "the core page" may ask for it by name.
 const GUIDE_INPUT = z.object({
   topic: z
     .enum(["core", ...GUIDE_TOPICS])
     .optional()
-    .describe("A topic page: sequence, class, editing or mermaid. Leave it out for the core page, which every diagram needs."),
+    .describe("A topic page: layout, flowchart, sequence, class, editing or mermaid. Leave it out for the core page, which every diagram needs."),
 });
 
-const VALIDATE_INPUT = z.object({
+const DIAGRAM_INPUT = z.object({
   path: z
     .string()
     .optional()
@@ -51,6 +53,25 @@ const VALIDATE_INPUT = z.object({
 
 /** A tool result that says the call itself went wrong, rather than the diagram. */
 const failed = (message: string) => ({ content: [{ type: "text" as const, text: message }], isError: true });
+
+/**
+ * The diagram a tool was given, by path or by text, and what to call it in
+ * the answer; or the failed result that says why there is none.
+ */
+async function diagramOf(
+  ws: Workspace,
+  { path: given, text }: { path?: string; text?: string },
+): Promise<{ text: string; name: string } | ReturnType<typeof failed>> {
+  if (given === undefined && text === undefined) return failed("Pass path, the diagram's ordo.yaml, or text, the file's contents.");
+  if (given !== undefined && text !== undefined) return failed("Pass path or text, not both.");
+  if (text !== undefined) return { text, name: "The diagram" };
+  try {
+    return { text: await readDiagramAt(ws, given!), name: given! };
+  } catch (e) {
+    if (e instanceof HttpError) return failed(e.message);
+    throw e;
+  }
+}
 
 /**
  * The diagram file a tool was pointed at: `<repo>/.ordo/<name>/ordo.yaml`,
@@ -93,7 +114,7 @@ const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
  * What validate_ordo answers: compact text for a model to act on. Every
  * diagnostic is one line, `line:col severity: message`. A diagram with no
  * errors also says what it holds, so the agent can check it wrote what it
- * meant to, and whether Ordo still has nodes to place.
+ * meant to, and whether it left nodes for Ordo to place.
  */
 function validationReport(text: string, name: string): string {
   const read = readDiagram(text);
@@ -113,10 +134,10 @@ function validationReport(text: string, name: string): string {
   const unplaced = diagram.nodes.filter((n) => !placed.has(n.id)).length;
   const layout =
     read.layout === null
-      ? "no layout yet: Ordo lays it out when the diagram opens"
+      ? 'no layout: Ordo will place every node top to bottom when the diagram opens; to choose where things go, write the layout (see ordo_guide topic "layout")'
       : unplaced === 0
         ? "every node has a position"
-        : `${count(unplaced, "node")} without a position yet: Ordo places ${unplaced === 1 ? "it" : "them"} when the diagram opens`;
+        : `${count(unplaced, "node")} without a position: Ordo will place ${unplaced === 1 ? "it" : "them"} when the diagram opens; give ${unplaced === 1 ? "it a position" : "them positions"} yourself (see ordo_guide topic "layout")`;
   const holds = `${count(diagram.nodes.length, "node")}${groups ? ` (${count(groups, "group")})` : ""}, ${count(diagram.edges.length, "edge")}`;
   const head = `${name} is valid: ${holds}; ${layout}.`;
   return warnings.length ? [head, `${count(warnings.length, "warning")}; the diagram opens, but read each one:`, ...lines].join("\n") : head;
@@ -130,7 +151,7 @@ function ordoServer(ws: Workspace) {
     {
       title: "How to write an Ordo diagram",
       description:
-        "Call this before you write or edit an Ordo diagram (.ordo/<name>/ordo.yaml). With no topic it returns the core page: what the file holds, every node kind, edge field and shape, an example, and the rules. Then ask for a topic when the diagram needs one: sequence (sequence diagrams), class (UML class and ER diagrams), editing (changing a diagram that already exists) or mermaid (turning Mermaid into Ordo).",
+        "Call this before you write or edit an Ordo diagram (.ordo/<name>/ordo.yaml). With no topic it returns the core page: what the file holds, every node kind, edge field and shape, an example, and the rules. Then ask for a topic: layout (where to put everything; read it for every diagram), flowchart (flowcharts and process diagrams: decisions, loops, parallel paths, swimlanes), sequence (sequence diagrams), class (UML class and ER diagrams), editing (changing a diagram that already exists) or mermaid (turning Mermaid into Ordo).",
       inputSchema: GUIDE_INPUT,
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     },
@@ -143,19 +164,37 @@ function ordoServer(ws: Workspace) {
       title: "Check an Ordo diagram",
       description:
         "Check an Ordo diagram the way the editor reads it, and get every problem in one pass: line and column, what is wrong, the values allowed, the nearest match for a misspelling, and the ordo_guide topic that explains it. Pass path, the diagram's ordo.yaml in the workspace, or text, the file's contents. Call it after every change, before you tell the user the diagram is done.",
-      inputSchema: VALIDATE_INPUT,
+      inputSchema: DIAGRAM_INPUT,
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     },
-    async ({ path: given, text }) => {
-      if (given === undefined && text === undefined) return failed("Pass path, the diagram's ordo.yaml, or text, the file's contents.");
-      if (given !== undefined && text !== undefined) return failed("Pass path or text, not both.");
-      if (text !== undefined) return { content: [{ type: "text", text: validationReport(text, "The diagram") }] };
+    async (args) => {
+      const diagram = await diagramOf(ws, args);
+      if ("isError" in diagram) return diagram;
+      return { content: [{ type: "text", text: validationReport(diagram.text, diagram.name) }] };
+    },
+  );
+
+  server.registerTool(
+    "render_ordo",
+    {
+      title: "See an Ordo diagram",
+      description:
+        "Draw an Ordo diagram as a PNG, the way the editor shows it when the file opens, so you can see the layout you wrote: what overlaps, where the lines run, which labels collide, what text is cut off. The picture is the diagram's own px doubled, or smaller so its long side fits 1568 px, with 24 px of margin round the drawing. Pass path, the diagram's ordo.yaml in the workspace, or text, the file's contents. Call it once validate_ordo reports no errors, and again after each change to the layout, until the diagram reads well.",
+      inputSchema: DIAGRAM_INPUT,
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+    },
+    async (args) => {
+      const diagram = await diagramOf(ws, args);
+      if ("isError" in diagram) return diagram;
+      let drawn;
       try {
-        return { content: [{ type: "text", text: validationReport(await readDiagramAt(ws, given!), given!) }] };
+        drawn = await renderDiagram(diagram.text);
       } catch (e) {
-        if (e instanceof HttpError) return failed(e.message);
-        throw e;
+        return failed(`Ordo couldn't draw ${diagram.name}: ${(e as Error).message}.`);
       }
+      if (!drawn.ok)
+        return failed(`${diagram.name} has ${count(drawn.diagnostics.length, "error")}, so it can't be drawn. Call validate_ordo, fix them, and draw it again.`);
+      return { content: [{ type: "image", data: drawn.png.toString("base64"), mimeType: "image/png" }] };
     },
   );
 

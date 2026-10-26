@@ -1,11 +1,11 @@
 # Sequence diagrams
 
-A sequence diagram is the one diagram where you write the layout as well as
-the structure. Its meaning is in where things sit: time runs down the page,
-and each message has to be level. Ordo can't work that out from the structure
-alone, so lay it out on the grid below. The user can still drag things about
-afterwards. Everything on the core page holds except rules 1 to 3: here the
-layout carries meaning, so you write it, read it and rewrite it.
+A sequence diagram's meaning is in where things sit: time runs down the page,
+and each message has to be level. So its layout follows the exact grid below
+rather than topic `layout`, and when you change the diagram you renumber the
+rows and rewrite the whole layout. The user can still drag things about
+afterwards. Everything else on the core page holds. Check the result with
+`render_ordo`, as for any diagram.
 
 The layout is the file's second YAML document: after the structure, a `---`
 line, then `ordo-layout: 1`, then `nodes:`, where each node sits, and

@@ -10,10 +10,17 @@ see [ordo-rf-mapping.md](ordo-rf-mapping.md).
 
 - `/api` is the local repo API: list folders, read, write and delete
   `.ordo/<name>/ordo.yaml`, and rename a diagram's folder.
-- `/mcp` is an MCP endpoint over Streamable HTTP, stateless, with two
-  read-only tools: `ordo_guide` teaches an agent the file format, and
-  `validate_ordo` checks the file it wrote. The agent writes the file itself;
-  no tool builds a diagram piece by piece.
+- `/mcp` is an MCP endpoint over Streamable HTTP, stateless, with three
+  read-only tools: `ordo_guide` teaches an agent the file format and how to
+  lay a diagram out, `validate_ordo` checks the file it wrote, and
+  `render_ordo` draws it as a PNG so the agent can see the layout. The agent
+  writes the file itself, layout included; no tool builds a diagram piece by
+  piece. `render_ordo` draws without a browser
+  ([`server/render/`](../server/render/)): the editor's own import gives the
+  nodes and edges, the sizes and edge ends React Flow would measure are
+  worked out from the numbers the node components draw with, and resvg
+  rasterises the SVG in a child process, so a drawing it can't handle fails
+  that call and not the server.
 - Every other path is the editor.
 
 In dev, Vite runs inside this server as middleware, so the editor keeps hot

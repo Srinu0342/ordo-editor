@@ -51,6 +51,21 @@ test("each shape says how much label it holds, or that it shows none", () => {
   assert.match(shapes, /`circle` \(\d+ × \d+\)/); // no name in brackets where the key says it
 });
 
+test("the size lists: every shape as it is dropped, and the other kinds in numbers from the code", () => {
+  const sizes = fill("{{list:sizes}}").split("\n");
+  assert.equal(sizes.length, SHAPE_GROUPS.length);
+  SHAPE_GROUPS.forEach(([, title, set], i) => {
+    assert.ok(sizes[i].startsWith(`- ${title}: `), sizes[i]);
+    for (const [key, s] of Object.entries(set)) assert.ok(sizes[i].includes(`\`${key}\` ${s.size[0]} × ${s.size[1]}`), key);
+  });
+  const kinds = fill("{{list:kindSizes}}");
+  assert.match(kinds, /^- group: .*24 px past the rightmost/m);
+  assert.match(kinds, /^- class: 190 px wide.*1 \+ 1 rows \d+, /m);
+  assert.match(kinds, /^- text: as big as its words/m);
+  assert.match(kinds, /^- an edge's label: a pill/m);
+  assert.equal(fill("{{list:groupPad}} {{list:groupTop}}"), "24 56");
+});
+
 test("fill: a list Ordo doesn't have is a mistake in the page; other braces are content", () => {
   assert.throws(() => fill("{{list:colours}}"), /not a list Ordo has/);
   assert.equal(fill("A{{text}} is a hexagon"), "A{{text}} is a hexagon");
