@@ -13,18 +13,18 @@
 </p>
 
 <p align="center">
-  <a href="#try-it-in-a-minute">Try it</a> ·
-  <a href="#why-ordo">Why Ordo</a> ·
-  <a href="#bring-your-agent">Agents</a> ·
-  <a href="#run-it-for-real">Run it</a> ·
-  <a href="#roadmap">Roadmap</a> ·
-  <a href="docs/development.md">Develop</a>
+  <a href="#get-started">Get started</a> ·
+  <a href="#drawing">Drawing</a> ·
+  <a href="#your-diagrams-are-files">Files &amp; Sync</a> ·
+  <a href="#import-from-mermaid">Mermaid</a> ·
+  <a href="#work-with-an-ai-agent">Agents</a> ·
+  <a href="#settings">Settings</a> ·
+  <a href="#keyboard-shortcuts">Shortcuts</a>
 </p>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
-  <img src="https://img.shields.io/badge/node-%5E20.19%20%7C%7C%20%E2%89%A522.12-339933" alt="Node ^20.19 or ≥22.12">
-  <a href="#bring-your-agent"><img src="https://img.shields.io/badge/MCP-%2Fmcp-6366f1" alt="MCP at /mcp"></a>
+  <a href="#work-with-an-ai-agent"><img src="https://img.shields.io/badge/MCP-%2Fmcp-6366f1" alt="MCP at /mcp"></a>
   <img src="https://img.shields.io/badge/status-early-orange" alt="Status: early">
 </p>
 
@@ -40,34 +40,190 @@ whose layout you can't touch.
 Ordo keeps them next to the code they describe. Open a repo and draw, and each
 diagram lands in `.ordo/` as a plain YAML file. Move a box, and `git diff`
 shows one line. Change the file in a PR, with `git pull` or through an AI
-agent, and the canvas catches up by itself. Nothing leaves your machine.
+agent, and the canvas catches up by itself. Ordo runs on your machine, and
+nothing leaves it.
+
+- **Draw** with 49 flowchart shapes, groups, UML classes, sequence-diagram
+  frames and styled lines.
+- **Import** Mermaid flowcharts and sequence diagrams as diagrams you can edit.
+- **Commit** each diagram as a readable file, and review it in the same PR as
+  the code.
+- **Hand it to an agent**, which can write a diagram, check it and look at it
+  before you do.
 
 > [!NOTE]
-> Ordo is early. The canvas, Mermaid import, the file format and local repo
-> mode all work today. The [roadmap](#roadmap) says what's next.
+> Ordo is early. Drawing, Mermaid import, the file format and repo sync all
+> work today.
 
-## Try it in a minute
+## Get started
+
+### Install and start Ordo
+
+You need Node.js `^20.19.0` or `>=22.12.0`.
 
 ```bash
 git clone https://github.com/Srinu0342/ordo-editor.git
 cd ordo-editor
 npm install
-npm run dev
+npm run build
+npm start
 ```
 
-Open http://localhost:5173, pick any repo, and name your first diagram. Opening
-a repo writes nothing: `.ordo/` is created with the first diagram you make.
+Open http://localhost:5173. Ordo has no login, so it only answers on this
+machine. To run it in Docker instead, or to choose which folders it can open,
+see [Settings](#settings).
 
-You need Node.js `^20.19.0` or `>=22.12.0`. To run a production build or use
-Docker, see [Run it for real](#run-it-for-real).
+### Open a project
 
-## Why Ordo
+Ordo opens on **Open a project**. A project is any folder, usually a repo.
 
-### It lives in your repo
+- **Recent** lists the repos you opened lately.
+- **Browse** walks the folders under your workspace root, which is your home
+  folder unless you [set another one](#settings). Click a folder to go into it,
+  and **Open** to pick it. Folders that are git repos, or already hold Ordo
+  diagrams, carry a `git` or `.ordo` badge.
 
-Each diagram is one file, `.ordo/<name>/ordo.yaml`, and one tab at the bottom
-of the canvas. The structure comes first and the layout after a `---`, so
-moving a box changes one line:
+Opening a repo writes nothing. If it has no diagrams yet, Ordo asks you to name
+the first one, and `.ordo/` is created when you do. If it has diagrams, the
+editor opens on the first one.
+
+**Projects** in the header closes the project and takes you back to the list.
+
+> [!TIP]
+> On macOS, the first time you browse Desktop, Documents or Downloads, the
+> system may ask whether your terminal can read them. If you refuse, Ordo says
+> it can't read the folder. You can allow it later under System Settings ›
+> Privacy & Security › Files and Folders.
+
+### Draw your first diagram
+
+1. Drag a shape from the **Nodes** panel on the left onto the canvas. Type in
+   the panel's search box to find one by name.
+2. Drag a second shape next to it.
+3. Click the first shape to show its connection points, then drag from one of
+   them onto the second shape to draw a line between them.
+4. Double-click a shape's label to name it, and press Enter when you're done.
+5. Press **Sync** (or `⌘S`) to write the diagram to `.ordo/<name>/ordo.yaml`.
+   Sync also runs by itself every 10 seconds.
+6. Commit the `.ordo/` folder like any other.
+
+## The editor at a glance
+
+| Area | What's there |
+| ---- | ------------ |
+| **Header** | Where you are (Ordo, then the open project), the diagram's sync status and **Sync**, **Import**, **View YAML**, the keyboard shortcuts, and the light and dark switch. |
+| **Sidebar** | Two panels: **Nodes** holds every shape to drag onto the canvas, and **Edges** styles and routes lines. Collapse it to give the canvas more room. |
+| **Canvas** | An infinite grid. The buttons in the corner zoom in and out and fit the diagram to the screen, and the minimap shows where you are. |
+| **Text bar** | Appears over the canvas when you select something with text, to set its size, weight and alignment. |
+| **Tabs** | One tab per diagram in the repo, along the bottom. `+` makes a new one. |
+
+Each tab remembers its zoom and position in this browser, so it opens where you
+left it. A tab you haven't opened in this browser yet is fitted to its diagram.
+
+## Drawing
+
+### Shapes
+
+The **Nodes** panel holds 49 shapes in six groups. Drag one onto the canvas to
+place it, and use the search box to filter the panel by name.
+
+| Group | Shapes |
+| ----- | ------ |
+| Terminators & junctions | Circle, Start, Double circle, Stop, Junction, Summary, Terminal, Fork / join |
+| Process & decision | Process, Event, Decision, Preparation, Subprocess, Divided process, Shaded process, Multi-process, Delay, Manual operation, Priority, Loop limit, Collate, Extract, Manual file |
+| Input, output & manual | Input / output, Output / input, Manual input, Display, Card, Paper tape, Internal storage, Communication link |
+| Documents | Document, Lined document, Multi-document, Tagged document, Tagged process |
+| Storage | Database, Direct access storage, Disk storage, Data store, Stored data |
+| Annotation & free form | Comment, Comment (right), Comment (both), Odd, Bang, Cloud, Note, Actor |
+
+Select a shape to resize it from its handles.
+
+### Groups, classes, text, tubes and frames
+
+The **Structural** section at the top of the Nodes panel holds five nodes that
+do more than draw an outline.
+
+- **Group** holds other nodes. Drop a node so that it sits entirely inside a
+  group and it joins that group; the group lights up while you drag to show
+  where the node will land. Drag it out again to take it out. Moving a group
+  moves everything in it, and groups can nest.
+- **Class** stacks compartments, for UML classes and ER entities.
+  Double-click the name or a row to edit it, and double-click the empty space
+  in a compartment to add a row.
+- **Text** is words with no frame around them, on as many lines as you type.
+  It opens for typing as soon as you drop it: Enter starts a new line, and Esc,
+  `⌘Enter` or a click away finishes. Text left empty removes the node.
+- **Timeline tube** is the activation bar of a sequence diagram. Drop it on a
+  line, such as a lifeline, and it rides that line: move the line and the tube
+  follows. Use **More taps** and **Fewer taps** to change how many points
+  messages can connect to, the rotate handle to turn it (hold Shift to snap to
+  15°), and **Release from the edge**, or a drag away from the line, to free
+  it.
+- **Fragment** is the loop, alt, opt or par frame of a sequence diagram.
+  Double-click the operator or a guard to edit it, and use the stepper on the
+  frame to add an operand (else, and, option) or remove the last one. A frame
+  never takes in the nodes inside it, so clicks still reach the lifelines and
+  messages it surrounds.
+
+### Lines
+
+To draw a line, select a node to show its four connection points, then drag
+from one onto another node. Every node shows its connection points while you
+draw, so you can see where the line can land. You can also click a connection
+point, then click the one you want the line to end on.
+
+The **Edges** panel styles lines. With lines selected it restyles them; with
+none selected it sets the style of the next line you draw. Selecting a line
+opens the panel for you.
+
+- **Text:** double-click a line to give it a label, or type in the panel's
+  Text field while one line is selected.
+- **Colour:** six swatches, or any colour from the picker. The darkest swatch
+  follows the theme, so it stays readable in light and dark.
+- **Weight:** 1, 1.5, 2, 3 or 4 px.
+- **Pattern:** solid, dashed or dotted.
+- **Ends:** a marker for each end, from 14: none, arrow, filled arrow, circle
+  and cross for flowcharts; inheritance, composition, aggregation and
+  dependency for UML; and one, many, zero or one, zero or many, and one or many
+  for ER cardinality.
+- **Routing:** **Straight** (point to point), **Orthogonal** (right angles
+  only), **Rounded step** (right angles with softened corners) or **Curved**.
+
+### Text
+
+Double-click any label to edit it. In a shape or on a line, Enter finishes and
+Shift+Enter starts a new line. Press Enter with a single text node selected to
+start typing in it.
+
+Select anything with text, including several things at once and lines as well
+as nodes, and the text bar appears:
+
+- **Size**, from 8 to 72 px. The − and + buttons step each item from its own
+  size, so a title stays bigger than the body text selected with it. Typing a
+  size sets them all to it.
+- **Weight:** Regular, Semibold or Bold.
+- **Alignment:** left, centre or right, for text nodes.
+- **Reset**, once you've changed something, returns each item to its own
+  size, weight and alignment.
+
+### Selecting and arranging
+
+- Click to select, `⌘`-click to add to the selection, Shift-drag to lasso, and
+  `⌘A` to select everything.
+- Drag empty canvas to pan; scroll or pinch to zoom.
+- Nodes snap to a 10 px grid. While you drag, guides show when the selection
+  lines up with the nodes around it, and lining up wins over the grid.
+- Paste lands under your pointer, and pasting into a group puts the copies in
+  it. Duplicate (`⌘D`) copies without touching your clipboard.
+- Undo and redo go back and forward over the last 30 changes.
+- Delete or Backspace removes the selection, along with any lines left with no
+  end.
+
+## Your diagrams are files
+
+Each diagram is one file, `.ordo/<name>/ordo.yaml`, and one tab along the
+bottom of the canvas. The file holds the structure first and the layout after a
+`---`, so moving a box changes one line:
 
 ```diff
    receipt: { x: 30, y: 260 }
@@ -76,11 +232,60 @@ moving a box changes one line:
    order: { x: 1080, y: 60, w: 190, h: 150 }
 ```
 
-Saving keeps your comments, key order and indentation. Ordo never runs git, so
-you commit `.ordo/` like any other folder and review diagrams in the same PR as
-the code they describe.
+Saving keeps the file's comments, key order and indentation, so diffs stay
+small and reviewable. Ordo never runs git: you commit `.ordo/` like any other
+folder, and review diagrams in the same PR as the code they describe.
 
-### Mermaid in, a real diagram out
+### Manage diagrams
+
+- **New:** `+` at the end of the tabs. The name is checked as you type.
+- **Rename:** the `⋯` on the open tab, or double-click the tab. The diagram's
+  folder moves and the file inside is untouched, so unsynced edits stay on the
+  canvas and the next Sync writes them under the new name.
+- **Delete:** the `⋯` on the open tab. Ordo asks first, then removes
+  `ordo.yaml`, and the folder too if nothing else is in it. A file that changed
+  on disk since it was loaded is never deleted: Sync first to see the change.
+- **View YAML** in the header shows the canvas as its file, to copy or
+  download.
+- **Import › Ordo YAML file…** opens a `.yaml` file from anywhere. It replaces
+  the canvas, and the next Sync writes it to the open tab.
+
+The repo and the open diagram are part of the URL, so a reload or a bookmark
+brings you back to the same place:
+
+```
+http://localhost:5173/?source=local&repo=code/payments-api&tab=checkout
+```
+
+### Sync
+
+Sync keeps the canvas and the file in step, in both directions. Edit on the
+canvas and Sync writes the file. Change the file, through `git pull`, a
+teammate's commit or an agent, and Sync loads it. It runs by itself every 10
+seconds, and straight away when you press **Sync** or `⌘S`.
+
+The header shows where the open diagram stands: **Up to date**, **Unsynced**,
+**Syncing…** or **File has errors**. The open tab shows a dot while it has
+unsynced edits.
+
+Sync never overwrites a file it hasn't seen. When it can't decide on its own,
+it asks:
+
+| What happened | Your choices |
+| ------------- | ------------ |
+| Both the canvas and the file changed | **Keep mine** writes the canvas over the file. **Take the file's** loads the file and drops your edits. **Download mine** saves the canvas as a file so you can decide later. |
+| The file changed and no longer reads as an Ordo diagram | Fix the file and it loads within a few seconds, or press Sync to load it now. If the canvas has edits too, you can keep yours or download them. |
+| The file was deleted, by git or by hand | **Recreate from canvas** writes it back. **Close tab** drops the diagram. |
+| You leave a diagram with unsynced edits | **Sync and switch**, or **Discard and switch**. |
+
+The automatic Sync never interrupts you: it says once that something needs a
+choice, and leaves it for the next time you press Sync. Every question offers
+Cancel, and pressing Enter never overwrites or deletes anything.
+
+One Ordo serves every repo under the workspace root, and each browser tab can
+have a different repo open.
+
+## Import from Mermaid
 
 <table>
   <tr>
@@ -103,44 +308,28 @@ the code they describe.
   </tr>
 </table>
 
-Flowcharts keep Mermaid's own layout, so the import looks the way Mermaid drew
-it. Sequence diagrams come back with participants, lifelines, activations,
-notes and loop, alt, opt and par frames. From there it's an Ordo diagram, so
-you're no longer stuck with the layout engine's choices.
+Choose **Import › Mermaid diagram…** in the header. Paste Mermaid source, drop
+a file (`.mmd`, `.mermaid`, `.md` or `.txt`) on the dialog, or browse for one.
+The dialog says what kind of diagram it found as soon as the text arrives.
+Press **Import** or `⌘Enter`.
 
-### Sync goes both ways
+| Diagram | What you get |
+| ------- | ------------ |
+| Flowchart | Mermaid's own layout, so the import looks the way Mermaid drew it. Subgraphs become groups, and Mermaid's extended `A@{ shape: … }` shapes map onto Ordo's. |
+| Sequence | Participants, lifelines, activations (as timeline tubes), messages, notes, and loop, alt, opt, par, critical and break frames, laid out by Ordo. |
 
-Edit on the canvas and Ordo writes the file. Change the file, whether through
-`git pull`, a teammate's commit or an agent, and the canvas reloads it. Sync
-runs by itself every 10 seconds, or straight away on `⌘S`. If both sides
-changed, it stops and asks which to keep. It never overwrites a file it hasn't
-seen.
+The import arrives as one selected group, to the right of whatever is already
+on the canvas, so several imports line up side by side. From there it's an
+ordinary Ordo diagram: move, restyle and nest anything in it.
 
-### Every shape is data
+- In a Markdown file, Ordo imports the first ` ```mermaid ` block.
+- A front-matter `title:` names the group the diagram lands in.
+- Other Mermaid types (class, state, ER, Gantt and so on) are recognised, and
+  Ordo tells you it can't import them yet rather than guessing.
 
-A node doesn't render markup. It returns a flat list of primitives, with theme
-tokens for colours. The canvas draws that list with React, and a headless
-walker draws the same list as SVG in plain Node, with no browser. Adding a
-shape means adding one row to a registry. [How Ordo works](docs/architecture.md)
-explains the design.
+Import is one way: Ordo doesn't export to Mermaid.
 
-## What you can draw
-
-- **49 shapes in six groups:** terminators, process and decision,
-  input/output, documents, storage, and annotation. Search the palette and drag
-  a shape onto the canvas.
-- **Five structural nodes:** a **Group** holds other nodes, a **Class** stacks
-  compartments for UML classes and ER entities, **Text** is a label with no
-  frame, a **Timeline tube** is an activation bar that rides an edge, and a
-  **Fragment** is the loop/alt/opt/par frame of a sequence diagram.
-- **Edges** in four routes (straight, orthogonal, rounded step and curved), with
-  flowchart, UML and ER cardinality markers and your choice of colour, weight
-  and dash.
-- **The editing you'd expect:** lasso and multi-select, copy and paste at the
-  pointer, undo and redo, alignment guides on a 10 px grid, drop a node into a
-  group to nest it, double-click a label to edit it, and light and dark themes.
-
-## Bring your agent
+## Work with an AI agent
 
 Agents are good at writing text files, and an Ordo diagram is a text file. Ask
 yours to write one into `.ordo/<name>/ordo.yaml`. With the repo open in Ordo,
@@ -148,54 +337,40 @@ the new diagram shows up as a tab within about ten seconds, and later edits to
 the open one load by themselves. When you edit on the canvas, the agent sees
 your changes the next time it reads the file.
 
-Ordo also serves MCP at `/mcp`, so the agent can learn the format, lay the
-diagram out itself, then check and look at its work before you see it:
-
-| Tool            | What it does |
-| --------------- | ------------ |
-| `ordo_guide`    | Teaches the format. With no topic it returns the core page: the file's structure, every node kind, edge field and shape, an example and the rules. Topics cover laying a diagram out (every shape's size, a grid, which sides edges use, keeping lines and labels clear), flowcharts (decisions, loops, parallel paths, swimlanes), sequence diagrams, class and ER diagrams, editing a diagram that already exists, and turning Mermaid into Ordo. |
-| `validate_ordo` | Checks a diagram, by its path in the workspace or by its text, and lists every problem in one pass: line and column, the values allowed, and the nearest match for a misspelling. |
-| `render_ordo`   | Draws a diagram as a PNG, the way the editor shows it when the file opens, so the agent can see what overlaps, where lines run and which labels collide, and fix the layout before you look. It draws without a browser. |
-
-To connect Claude Code:
+Ordo also serves MCP at `/mcp`. Through it the agent learns the format, then
+checks its diagram for mistakes and sees it as a picture, so it can fix the
+layout before you look. The tools only read: they never write a file or touch
+your canvas. To connect Claude Code:
 
 ```bash
 claude mcp add --transport http ordo http://localhost:5173/mcp
 ```
 
-Any other client that speaks Streamable HTTP can use the same URL. When a
-client connects, Ordo asks the agent to read the guide before it writes a
-diagram, and to validate and draw it after. All three tools only read. They
-never write a file or touch the canvas in your browser, and `validate_ordo`
-and `render_ordo` open nothing but `.ordo/<name>/ordo.yaml` files under the
-workspace root. The guide is plain Markdown in
-[docs/agents/](docs/agents/), so you can read exactly what your agent is told.
+Any other client that speaks Streamable HTTP can use the same URL, while Ordo
+is running. What the agent is taught is plain Markdown in
+[docs/agents/](docs/agents/).
 
-## Run it for real
+## Settings
 
-Ordo is a local tool. It has no login, so it only answers on this machine.
+Ordo reads its settings from a `.env` file at the top of its folder. Start from
+the sample, which explains each one:
 
 ```bash
-npm install
-npm run build
-npm start                      # http://localhost:5173
+cp .env.sample .env
 ```
 
-The project picker starts at your home folder. To open repos from somewhere
-else, set the workspace root in `.env` at the top of the clone:
+| Setting | What it does | Default |
+| ------- | ------------ | ------- |
+| `ORDO_WORKSPACE` | The folder whose repos Ordo can open. The project picker starts here. A leading `~` is your home folder. | `~` |
+| `PORT` | The port for the editor and `/mcp`. | `5173` |
+| `HOST` | The address Ordo listens on. Keep it on `localhost`: Ordo has no login, and anything that can reach the port can read and write `.ordo/` in your repos. | `localhost` |
+| `CONFIG` | Editor switches, as one JSON object. `MINI_MAP` shows or hides the minimap, for example `{"MINI_MAP": false}`. | Minimap on |
 
-```bash
-cp .env.sample .env      # then set ORDO_WORKSPACE=~/code in it
-```
-
-`.env.sample` lists every setting (`ORDO_WORKSPACE`, `PORT`, `HOST`, and
-`CONFIG` for the editor's switches, such as `{"MINI_MAP": false}`). The server
-reads `.env` when it starts, so restart it after a change. A variable set in
-the shell wins over the file, so `ORDO_WORKSPACE=~/notes npm start` works for
-a one-off.
+Restart Ordo after changing `.env`. A variable set in the shell wins over the
+file, so `ORDO_WORKSPACE=~/notes npm start` works for a one-off.
 
 <details>
-<summary><b>With Docker</b></summary>
+<summary><b>Run Ordo in Docker</b></summary>
 
 ```bash
 docker build -t ordo .
@@ -205,155 +380,44 @@ docker run --rm -p 127.0.0.1:5173:5173 \
   ordo
 ```
 
-Each `-v` mounts a folder of repos under `/workspace`, the root inside the
-container. Keep the `127.0.0.1:` in `-p`: without it Docker publishes the port
-on every network interface, and anyone who can reach your machine could read
-and write the mounted repos. On Linux, add `--user "$(id -u):$(id -g)"` so the
-files Ordo writes belong to you. Pass other settings with `-e`, such as
-`-e CONFIG='{"MINI_MAP": false}'`; the image sets `HOST`, `PORT` and
-`ORDO_WORKSPACE` itself.
+Each `-v` mounts a folder of repos under `/workspace`, the workspace root
+inside the container. Keep the `127.0.0.1:` in `-p`: without it Docker
+publishes the port on every network interface, and anyone who can reach your
+machine could read and write the mounted repos. On Linux, add
+`--user "$(id -u):$(id -g)"` so the files Ordo writes belong to you. Pass
+`CONFIG` with `-e`, such as `-e CONFIG='{"MINI_MAP": false}'`; the image sets
+`HOST`, `PORT` and `ORDO_WORKSPACE` itself.
 
 </details>
 
-<details>
-<summary><b>macOS asks about Desktop, Documents or Downloads</b></summary>
-
-The first listing of Desktop, Documents or Downloads may ask for your terminal
-to get access to them. If it is refused, the picker says it can't read that
-folder. You can allow it under System Settings › Privacy & Security › Files and
-Folders.
-
-</details>
-
-## Reference
-
-<details>
-<summary><b>Projects, tabs and Sync</b></summary>
-
-http://localhost:5173/ opens on **Open a project**: the repos you opened lately,
-and a browser over the folders under the workspace root (your home folder by
-default; see [Run it for real](#run-it-for-real)). There is no canvas until a
-project is open.
-
-- A folder with no diagrams yet asks for the first one's name.
-- A folder with diagrams opens the editor on its first tab.
-- **Projects** in the header closes the project and goes back to the list.
-
-The repo and the open diagram go in the URL, so a reload or a bookmark comes
-back to the same place:
-
-```
-http://localhost:5173/?source=local&repo=code/payments-api&tab=checkout
-```
-
-- Each diagram is one file, `<repo>/.ordo/<name>/ordo.yaml`, and shows as a tab
-  at the bottom of the canvas. `+` creates a new one; `.ordo/` is created with
-  the first diagram, so opening a repo writes nothing.
-- Each tab opens where you left it: its zoom and position are kept in this
-  browser. A tab you haven't opened here before is fitted to its diagram.
-- The `⋯` on the open tab renames or deletes the diagram; a double-click on the
-  tab renames it too. A rename moves its folder and leaves the file inside
-  untouched, so unsynced edits stay on the canvas and the next Sync writes them
-  under the new name. Delete asks first, then removes `ordo.yaml` (and the
-  folder, if nothing else is in it). A file that changed on disk since it was
-  loaded is never deleted: Sync first to see the change.
-- **Sync** (or `⌘S`) is two-way, and also runs on its own every 10 seconds. If
-  only the canvas changed it writes the file; if only the file changed (an
-  agent, `git pull`) it loads it. If both changed it asks: keep yours, take the
-  file's, or download yours. The automatic one never asks: it says what needs
-  a choice once and leaves it for Sync. It never overwrites a file it hasn't
-  seen.
-- A save keeps the file's own indentation, and a drag changes only lines after
-  the `---`, so diffs stay small.
-- Leaving a diagram with unsynced edits asks first.
-- **Import** brings in a Mermaid diagram or an Ordo `.yaml` file; **View YAML**
-  shows the canvas as its file, to copy or download.
-- Ordo never runs git. Commit `.ordo/` like any other folder.
-
-One Ordo process serves every repo under the root, and each browser tab can
-have a different repo open.
-
-</details>
-
-<details>
-<summary><b>Mermaid import</b></summary>
-
-Paste Mermaid source, drop in a file (`.mmd`, `.mermaid`, `.md`, `.txt`), or
-browse for one. Ordo reads the diagram type with Mermaid's own detector and
-sends the diagram to the importer for that type:
-
-| Diagram   | How it imports |
-| --------- | -------------- |
-| Flowchart | Ordo keeps Mermaid's parse and its dagre layout, so the result matches Mermaid's own render. Subgraphs become groups, and the extended `A@{ shape: … }` syntax maps onto Ordo's shapes. |
-| Sequence  | Ordo uses the parse only and rebuilds the layout in its own units. It imports participants, lifelines, activations (as tubes), messages, notes, and loop/alt/opt/par/critical/break fragments. |
-
-Ordo recognises other diagram types (class, state, ER, Gantt and so on) by
-name and shows a toast saying it can't import them yet. It does not push them
-through the wrong importer.
-
-In a Markdown file, Ordo imports the first ` ```mermaid ` block. A front-matter
-`title:` names the group the diagram lands in. Each import arrives as one
-selected group, placed to the right of whatever is already on the canvas.
-
-</details>
-
-<details>
-<summary><b>Keyboard shortcuts</b></summary>
+## Keyboard shortcuts
 
 Use `⌘` on macOS and `Ctrl` elsewhere. In the app, the keyboard button in the
-header shows this list.
+header shows the main ones.
 
-| Shortcut                  | Action |
-| ------------------------- | ------ |
-| Shift-drag                | Lasso select |
-| `⌘`-click                 | Add to the selection |
-| `⌘A`                      | Select all |
-| `⌘C` / `⌘X` / `⌘V`        | Copy / cut / paste at the pointer |
-| `⌘D`                      | Duplicate |
-| `⌘Z` / `⇧⌘Z`              | Undo / redo |
-| `⌘S`                      | Sync |
-| Delete / Backspace        | Delete the selection |
-| Double-click a label      | Edit it |
+| Shortcut | Action |
+| -------- | ------ |
+| Shift-drag | Lasso select |
+| `⌘`-click | Add to the selection |
+| `⌘A` | Select all |
+| `⌘C` / `⌘X` / `⌘V` | Copy / cut / paste at the pointer |
+| `⌘D` | Duplicate |
+| `⌘Z` / `⇧⌘Z` | Undo / redo |
+| `⌘S` | Sync |
+| Delete / Backspace | Delete the selection |
+| Double-click a label | Edit it |
+| Double-click a line | Give it text |
+| Enter | Edit the selected text node |
+| Enter / Shift+Enter | While editing a label: finish / new line |
+| Esc or `⌘Enter` | While editing a text node: finish |
 | Double-click the open tab | Rename the diagram |
-
-In the import dialog, `⌘Enter` imports and `Esc` closes.
-
-</details>
-
-## Roadmap
-
-- [x] A canvas with 49 shapes, five structural nodes and styled edges
-- [x] Mermaid import for flowcharts and sequence diagrams
-- [x] Diagrams as files in your repo, with two-way Sync
-- [x] Sync that runs by itself, so agents and `git pull` show up live
-- [x] An MCP endpoint for agents
-- [x] Rename and delete diagrams from Ordo
-- [ ] Hosted mode, with GitHub as the repo
-- [ ] More Mermaid importers: class, state, ER and C4
-
-Exporting to Mermaid is deliberately out of scope. Import is one way.
+| `⌘Enter` / Esc | In the import dialog: import / close |
 
 ## Contributing
 
-Your first PR can be one row. Every box shape is an entry in
-[`src/shapes/registry.ts`](src/shapes/registry.ts), and the palette, its
-search, the file format and the MCP tools all read from there:
-
-```ts
-const PROC: ShapeSet = {
-  rect: {
-    label: "Process",
-    size: [160, 48],
-    draw: (w, h) => [rect(1, 1, n(w - 2), n(h - 2)), mid(w, h)],
-  },
-  // …
-};
-```
-
-[Developing Ordo](docs/development.md) covers setup, scripts, tests and the code
-layout, and [How Ordo works](docs/architecture.md) explains the design. Please
-run `npm test` and `npm run typecheck` before opening a PR. Issues and pull
-requests are welcome.
+Issues and pull requests are welcome. [Developing Ordo](docs/development.md)
+covers running from source, tests and adding a shape, and
+[How Ordo works](docs/architecture.md) explains the design.
 
 ## License
 

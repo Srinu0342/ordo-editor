@@ -17,7 +17,7 @@ npm run dev                    # http://localhost:5173, with hot reload
 `npm run dev` starts the server with Vite inside it, so the API, the MCP
 endpoint and the editor share one port, and the editor still reloads on save.
 Settings come from `.env` at the top of the clone (`cp .env.sample .env`). See
-[Running Ordo](../README.md#run-it-for-real) in the README.
+[Settings](../README.md#settings) in the README.
 
 ## Scripts
 
